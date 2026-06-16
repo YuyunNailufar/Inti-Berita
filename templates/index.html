@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="id" class="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IntiBerita — Ringkasan berita Bahasa Indonesia berbasis mT5</title>
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <!-- Tailwind Config -->
+  <script src="{{ url_for('static', filename='tailwind.config.js') }}"></script>
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+  <!-- Styles -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+
+<body class="bg-surface text-on-surface overflow-x-hidden selection:bg-primary-fixed selection:text-on-primary-fixed">
+
+  <!-- Background canvas (subtle animated gradient) -->
+  <canvas id="bg-canvas" class="fixed inset-0 pointer-events-none z-0" style="opacity:0.7"></canvas>
+
+  <!-- ══════════════════════ TOP APP BAR ══════════════════════════════════════ -->
+  <header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-md border-b border-outline-variant/20 shadow-sm">
+    <div class="max-w-container-max mx-auto px-4 md:px-lg flex items-center justify-between h-16">
+
+      <!-- Logo -->
+      <div class="flex items-center gap-xs">
+        <span class="material-symbols-outlined text-primary text-[28px] fill">auto_stories</span>
+        <h1 class="text-headline-lg font-bold text-primary">IntiBerita</h1>
+      </div>
+
+      <!-- Nav -->
+      <nav class="hidden md:flex items-center gap-lg">
+        <a href="#demo" class="text-label-md text-on-surface-variant hover:text-primary transition-colors">Demo</a>
+        <a href="#evaluasi" class="text-label-md text-on-surface-variant hover:text-primary transition-colors">Evaluasi</a>
+        <a href="#tentang" class="text-label-md text-on-surface-variant hover:text-primary transition-colors">Tentang</a>
+      </nav>
+
+      <!-- Model badge -->
+      <div class="flex items-center gap-xs px-3 py-1.5 rounded-full bg-primary/8 border border-primary/20">
+        <span class="material-symbols-outlined text-primary text-[14px] fill">bolt</span>
+        <span class="text-label-sm text-primary font-bold">mT5-small + TextRank</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="relative z-10 pt-24 pb-xl px-4 md:px-0">
+    <div class="max-w-container-max mx-auto space-y-xl">
+
+      <!-- ══════════════════ HERO ════════════════════════════════════════════ -->
+      <section class="text-center space-y-md py-lg" id="hero">
+        <div class="inline-flex items-center gap-xs px-4 py-1.5 rounded-full bg-primary/8 border border-primary/20">
+          <span class="material-symbols-outlined text-primary text-[14px] fill">science</span>
+          <span class="text-primary text-label-sm">Studi Komparasi · Dataset IndoSum · 93.870 Artikel</span>
+        </div>
+
+        <h2 class="text-headline-xl hero-title text-on-surface max-w-3xl mx-auto">
+          Automatic Text Summarization
+        </h2>
+        <p class="text-body-lg text-on-surface-variant max-w-xl mx-auto">
+          Bandingkan pendekatan <strong class="text-primary font-semibold">Abstraktif (mT5)</strong>
+          dan <strong class="text-on-surface font-semibold">Ekstraktif (TextRank)</strong>
+          secara langsung pada berita berbahasa Indonesia.
+        </p>
+
+        <!-- Stat chips -->
+        <div class="flex flex-wrap justify-center gap-sm pt-xs">
+          <div class="flex items-center gap-1 px-3 py-1.5 rounded-full bg-surface-container border border-outline-variant/30">
+            <span class="material-symbols-outlined text-secondary text-[16px] fill">dataset</span>
+            <span class="text-label-sm text-on-surface-variant">93.870 Artikel IndoSum</span>
+          </div>
+          <div class="flex items-center gap-1 px-3 py-1.5 rounded-full bg-surface-container border border-outline-variant/30">
+            <span class="material-symbols-outlined text-secondary text-[16px] fill">memory</span>
+            <span class="text-label-sm text-on-surface-variant">mT5-small · 300M Parameter</span>
+          </div>
+          <div class="flex items-center gap-1 px-3 py-1.5 rounded-full bg-surface-container border border-outline-variant/30">
+            <span class="material-symbols-outlined text-secondary text-[16px] fill">emoji_events</span>
+            <span class="text-label-sm text-on-surface-variant">ROUGE + BERTScore Eval</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════ DEMO SECTION ════════════════════════════════════ -->
+      <section id="demo" class="grid grid-cols-1 lg:grid-cols-12 gap-lg items-start">
+
+        <!-- ── Left: Input Panel ─────────────────────────────────────────── -->
+        <div class="lg:col-span-8 space-y-md">
+          <div class="ai-input-container shadow-[0_4px_20px_rgba(17,24,39,0.06)]">
+            <div id="scan-line" class="ai-scan-line"></div>
+
+            <!-- Segmented tabs -->
+            <div class="flex p-1.5 bg-surface-container-low m-4 rounded-lg w-fit">
+              <button class="tab-btn px-5 py-2 rounded-md text-label-md bg-white shadow-sm text-primary transition-all duration-200" data-tab="paste">
+                <span class="material-symbols-outlined text-[16px] align-middle mr-1">article</span>Tempel Teks
+              </button>
+              <button class="tab-btn px-5 py-2 rounded-md text-label-md text-on-surface-variant hover:text-on-surface transition-all" data-tab="url">
+                <span class="material-symbols-outlined text-[16px] align-middle mr-1">link</span>URL Berita
+              </button>
+              <button class="tab-btn px-5 py-2 rounded-md text-label-md text-on-surface-variant hover:text-on-surface transition-all" data-tab="search">
+                <span class="material-symbols-outlined text-[16px] align-middle mr-1">search</span>Cari Topik
+              </button>
+            </div>
+
+            <!-- ── Panel: Paste Text -->
+            <div id="panel-paste" class="px-4 pb-4">
+              <textarea
+                id="main-textarea"
+                class="w-full h-72 p-4 text-body-md bg-transparent border border-outline-variant/30 rounded-xl focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none custom-scrollbar transition-all"
+                placeholder="Tempelkan artikel, berita, atau dokumen berbahasa Indonesia di sini…&#10;&#10;Minimal 50 karakter untuk memulai ringkasan."></textarea>
+
+              <div class="flex items-center justify-between pt-3">
+                <div class="flex gap-md">
+                  <span class="text-label-sm text-on-surface-variant/70 flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[16px]">description</span>
+                    <span id="word-count">0 Kata</span>
+                  </span>
+                  <span class="text-label-sm text-on-surface-variant/70 flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[16px]">schedule</span>
+                    <span id="read-time">1 Menit Baca</span>
+                  </span>
+                </div>
+                <button
+                  id="summarize-btn"
+                  class="bg-primary text-on-primary px-7 py-3 rounded-xl text-label-md flex items-center gap-2 hover:shadow-lg hover:-translate-y-0.5 transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none">
+                  <span class="material-symbols-outlined">auto_awesome</span>
+                  Ringkas Sekarang
+                </button>
+              </div>
+            </div>
+
+            <!-- ── Panel: URL Berita -->
+            <div id="panel-url" class="hidden px-4 pb-4">
+              <div class="space-y-3">
+                <p class="text-label-md text-on-surface-variant">Tempelkan URL artikel berita, sistem akan otomatis mengekstrak isinya.</p>
+                <div class="flex gap-sm">
+                  <input
+                    id="url-input"
+                    type="url"
+                    placeholder="https://www.kompas.com/artikel/..."
+                    class="flex-1 px-4 py-3 rounded-xl border border-outline-variant/40 focus:ring-2 focus:ring-primary/30 focus:border-primary text-body-md transition-all">
+                  <button
+                    id="url-fetch-btn"
+                    class="bg-primary text-on-primary px-6 py-3 rounded-xl text-label-md hover:shadow-md hover:-translate-y-0.5 transition-all active:scale-95 whitespace-nowrap">
+                    Ambil Teks
+                  </button>
+                </div>
+                <p id="url-status" class="text-label-sm"></p>
+
+                <!-- Preview teks hasil scrape -->
+                <div id="url-preview-box" class="hidden space-y-2">
+                  <div class="flex items-center justify-between">
+                    <span class="text-label-sm text-on-surface-variant flex items-center gap-1">
+                      <span class="material-symbols-outlined text-[15px]">description</span>
+                      <span id="url-word-count">0 kata</span> · <span id="url-read-time">1 menit baca</span>
+                    </span>
+                  </div>
+                  <textarea
+                    id="url-textarea"
+                    class="w-full h-52 p-4 text-body-md bg-surface-container-low border border-outline-variant/30 rounded-xl focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none custom-scrollbar transition-all"
+                    placeholder="Teks artikel akan muncul di sini setelah URL diambil…"
+                    readonly></textarea>
+                  <div class="flex justify-end">
+                    <button
+                      id="summarize-btn-url"
+                      class="bg-primary text-on-primary px-7 py-3 rounded-xl text-label-md flex items-center gap-2 hover:shadow-lg hover:-translate-y-0.5 transition-all active:scale-95">
+                      <span class="material-symbols-outlined">auto_awesome</span>
+                      Ringkas Sekarang
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Supported sources hint -->
+                <div class="flex flex-wrap gap-xs pt-1">
+                  <span class="text-[10px] text-on-surface-variant/60 mr-1">Didukung:</span>
+                  <span class="text-[10px] px-2 py-0.5 bg-surface-container rounded-full text-on-surface-variant">Kompas</span>
+                  <span class="text-[10px] px-2 py-0.5 bg-surface-container rounded-full text-on-surface-variant">Detik</span>
+                  <span class="text-[10px] px-2 py-0.5 bg-surface-container rounded-full text-on-surface-variant">Tempo</span>
+                  <span class="text-[10px] px-2 py-0.5 bg-surface-container rounded-full text-on-surface-variant">CNN Indonesia</span>
+                  <span class="text-[10px] px-2 py-0.5 bg-surface-container rounded-full text-on-surface-variant">& lainnya</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── Panel: Cari Topik -->
+            <div id="panel-search" class="hidden px-4 pb-4">
+              <div class="space-y-3">
+                <p class="text-label-md text-on-surface-variant">Cari berita terkini berdasarkan kata kunci, lalu pilih artikel untuk diringkas.</p>
+                <div class="flex gap-sm">
+                  <input
+                    id="search-input"
+                    type="text"
+                    placeholder="Contoh: ekonomi Indonesia, teknologi AI…"
+                    class="flex-1 px-4 py-3 rounded-xl border border-outline-variant/40 focus:ring-2 focus:ring-primary/30 focus:border-primary text-body-md transition-all">
+                  <button
+                    id="search-btn"
+                    class="bg-primary text-on-primary px-6 py-3 rounded-xl text-label-md hover:shadow-md hover:-translate-y-0.5 transition-all active:scale-95">
+                    Cari
+                  </button>
+                </div>
+                <!-- Results -->
+                <div id="search-results" class="space-y-2 max-h-64 overflow-y-auto custom-scrollbar"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Right: Settings Panel ─────────────────────────────────────── -->
+        <aside class="lg:col-span-4">
+          <div class="bg-white rounded-xl p-lg shadow-[0_4px_20px_rgba(17,24,39,0.06)] border border-outline-variant/30 space-y-lg">
+            <h3 class="text-headline-md">Konfigurasi</h3>
+
+            <!-- Metode -->
+            <div class="space-y-sm">
+              <label class="text-label-md text-on-surface-variant">Metode Ringkasan</label>
+              <div class="space-y-xs">
+                <label id="method-abs" class="flex items-start gap-sm p-3 rounded-lg border-2 border-primary bg-primary/5 cursor-pointer transition-all">
+                  <input type="radio" name="method" value="both" checked class="mt-0.5 text-primary focus:ring-primary">
+                  <div>
+                    <p class="text-label-md text-on-surface font-semibold">Keduanya (Default)</p>
+                    <p class="text-[11px] text-on-surface-variant/70 mt-0.5">Tampilkan Abstraktif & Ekstraktif sekaligus untuk perbandingan.</p>
+                  </div>
+                </label>
+                <label class="flex items-start gap-sm p-3 rounded-lg border-2 border-outline-variant/30 hover:bg-surface-container cursor-pointer transition-all">
+                  <input type="radio" name="method" value="abstractive" class="mt-0.5 text-primary focus:ring-primary">
+                  <div>
+                    <p class="text-label-md text-on-surface">Abstractive (mT5)</p>
+                    <p class="text-[11px] text-on-surface-variant/70 mt-0.5">Menghasilkan kalimat baru yang alami & ringkas.</p>
+                  </div>
+                </label>
+                <label class="flex items-start gap-sm p-3 rounded-lg border-2 border-outline-variant/30 hover:bg-surface-container cursor-pointer transition-all">
+                  <input type="radio" name="method" value="extractive" class="mt-0.5 text-primary focus:ring-primary">
+                  <div>
+                    <p class="text-label-md text-on-surface">Extractive (TextRank)</p>
+                    <p class="text-[11px] text-on-surface-variant/70 mt-0.5">Mengambil kalimat inti langsung dari teks asli.</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <!-- Panjang Ringkasan -->
+            <div class="space-y-sm">
+              <div class="flex justify-between items-center">
+                <label class="text-label-md text-on-surface-variant">Panjang Ringkasan</label>
+                <span id="slider-label" class="text-primary font-bold text-label-sm">Sedang</span>
+              </div>
+              <input id="length-slider" type="range" min="1" max="3" step="1" value="2">
+              <div class="flex justify-between text-[10px] text-on-surface-variant uppercase tracking-wider font-bold">
+                <span>Pendek</span><span>Sedang</span><span>Panjang</span>
+              </div>
+              <!-- Length hint -->
+              <p class="text-[11px] text-on-surface-variant/60">
+                Pendek: ~60 token / 2 kal. &nbsp;·&nbsp; Sedang: ~120 / 3 kal. &nbsp;·&nbsp; Panjang: ~200 / 5 kal.
+              </p>
+            </div>
+
+            <!-- Opsi tambahan -->
+            <div class="space-y-xs pt-xs border-t border-outline-variant/20">
+              <div class="flex items-center justify-between p-2 rounded-lg hover:bg-surface-container-low transition-colors">
+                <div>
+                  <p class="text-label-md text-on-surface-variant">Fokus Kata Kunci</p>
+                  <p class="text-[11px] text-on-surface-variant/60">Ekstrak keyword untuk panduan mT5</p>
+                </div>
+                <div id="toggle-keywords" class="toggle-switch on" role="switch" aria-checked="true"></div>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <!-- ══════════════════ RESULTS SECTION ════════════════════════════════ -->
+      <section id="results-section" class="hidden space-y-md">
+
+        <!-- Header -->
+        <div class="flex items-center justify-between flex-wrap gap-sm">
+          <h3 class="text-headline-lg">Hasil Ringkasan</h3>
+          <div class="flex gap-xs">
+            <button id="export-btn" class="flex items-center gap-1 px-4 py-2 rounded-lg border border-outline-variant/40 hover:bg-surface-container text-label-md text-on-surface-variant transition-colors">
+              <span class="material-symbols-outlined text-[18px]">download</span>Ekspor .txt
+            </button>
+          </div>
+        </div>
+
+        <!-- Keyword chips (hidden until results) -->
+        <div id="keyword-section" class="hidden">
+          <div class="flex flex-wrap items-center gap-xs">
+            <span class="text-label-sm text-on-surface-variant mr-1">
+              <span class="material-symbols-outlined text-[16px] align-middle fill">key</span> Kata Kunci:
+            </span>
+            <div id="keyword-badges" class="flex flex-wrap gap-xs"></div>
+          </div>
+        </div>
+
+        <!-- Cards grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-lg">
+
+          <!-- ── Abstractive Card -->
+          <div id="abs-card" class="result-card bg-white rounded-xl p-lg border border-primary/20 shadow-[0_8px_30px_rgba(17,24,39,0.07)] space-y-md relative overflow-hidden">
+            <!-- Left accent bar -->
+            <div class="absolute top-0 left-0 w-1 h-full bg-primary rounded-l-xl"></div>
+
+            <!-- Card header -->
+            <div class="flex justify-between items-start pl-2">
+              <div>
+                <span class="bg-primary/10 text-primary px-3 py-1 rounded-full text-label-sm font-bold">Abstraktif · mT5-small</span>
+                <p class="text-[11px] text-on-surface-variant/60 italic mt-1">Kalimat baru hasil generasi model</p>
+              </div>
+              <button id="copy-abs" class="p-1.5 hover:bg-surface-container rounded-lg transition-colors" title="Salin ringkasan">
+                <span class="material-symbols-outlined text-on-surface-variant text-[18px]">content_copy</span>
+              </button>
+            </div>
+
+            <!-- Metric badges -->
+            <div id="abs-badges" class="flex gap-xs pl-2 flex-wrap"></div>
+
+            <!-- Summary text -->
+            <p id="abs-text" class="text-body-md text-on-surface leading-relaxed pl-2 min-h-[80px]"></p>
+
+            <!-- Footer stats -->
+            <div class="flex items-center gap-md pt-xs border-t border-outline-variant/20 pl-2">
+              <span class="text-[11px] text-on-surface-variant flex items-center gap-1">
+                <span class="material-symbols-outlined text-[14px]">description</span>
+                <span id="abs-word-count">— kata</span>
+              </span>
+              <span class="text-[11px] text-secondary font-bold flex items-center gap-1">
+                <span class="material-symbols-outlined text-[14px] fill">compress</span>
+                <span id="abs-compression">—</span> kompresi
+              </span>
+            </div>
+          </div>
+
+          <!-- ── Extractive Card -->
+          <div id="ext-card" class="result-card bg-white rounded-xl p-lg border border-outline-variant/30 shadow-[0_4px_20px_rgba(17,24,39,0.05)] space-y-md">
+
+            <!-- Card header -->
+            <div class="flex justify-between items-start">
+              <div>
+                <span class="bg-surface-container-highest text-on-surface-variant px-3 py-1 rounded-full text-label-sm font-bold">Ekstraktif · TextRank</span>
+                <p class="text-[11px] text-on-surface-variant/60 italic mt-1">Kalimat inti terpilih dari teks asli</p>
+              </div>
+              <button id="copy-ext" class="p-1.5 hover:bg-surface-container rounded-lg transition-colors" title="Salin ringkasan">
+                <span class="material-symbols-outlined text-on-surface-variant text-[18px]">content_copy</span>
+              </button>
+            </div>
+
+            <!-- Metric badges -->
+            <div id="ext-badges" class="flex gap-xs flex-wrap"></div>
+
+            <!-- Sentence list -->
+            <div id="ext-list" class="space-y-0 min-h-[80px]"></div>
+
+            <!-- Footer stats -->
+            <div class="flex items-center gap-md pt-xs border-t border-outline-variant/20">
+              <span class="text-[11px] text-on-surface-variant flex items-center gap-1">
+                <span class="material-symbols-outlined text-[14px]">description</span>
+                <span id="ext-word-count">— kata</span>
+              </span>
+              <span class="text-[11px] text-secondary font-bold flex items-center gap-1">
+                <span class="material-symbols-outlined text-[14px] fill">compress</span>
+                <span id="ext-compression">—</span> kompresi
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Comparison Table -->
+        <div class="bg-white rounded-xl border border-outline-variant/30 shadow-[0_4px_20px_rgba(17,24,39,0.05)] overflow-hidden">
+          <div class="px-lg py-md border-b border-outline-variant/20 flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary text-[20px] fill">leaderboard</span>
+            <h4 class="text-headline-md">Perbandingan Metrik (Input Ini)</h4>
+          </div>
+          <div id="comparison-table" class="overflow-x-auto px-2 py-1"></div>
+        </div>
+
+        <!-- New button -->
+        <div class="flex justify-center pt-xs">
+          <button id="new-btn" class="flex items-center gap-2 px-8 py-3 rounded-xl border-2 border-primary text-primary text-label-md font-semibold hover:bg-primary/5 hover:-translate-y-0.5 transition-all active:scale-95">
+            <span class="material-symbols-outlined text-[20px]">add</span>Ringkas Teks Baru
+          </button>
+        </div>
+      </section>
+
+      <!-- ══════════════════ EVALUASI SECTION ════════════════════════════════ -->
+      <section id="evaluasi" class="space-y-md">
+        <div class="text-center space-y-xs">
+          <div class="inline-flex items-center gap-xs px-3 py-1 rounded-full bg-secondary/8 border border-secondary/20">
+            <span class="material-symbols-outlined text-secondary text-[14px] fill">bar_chart</span>
+            <span class="text-secondary text-label-sm font-bold">Hasil Evaluasi Training</span>
+          </div>
+          <h3 class="text-headline-lg text-on-surface">Perbandingan Model — Dataset IndoSum</h3>
+          <p class="text-body-md text-on-surface-variant max-w-lg mx-auto">
+            Fine-tuning mT5-small pada 10.000 sampel (3 epoch, Google Colab Tesla T4).
+            TextRank tidak memerlukan training.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-lg">
+
+          <!-- Metric bars -->
+          <div class="bg-white rounded-xl p-lg border border-outline-variant/30 shadow-[0_4px_20px_rgba(17,24,39,0.05)] space-y-lg">
+            <h4 class="text-headline-md flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary text-[20px]">analytics</span>
+              Visualisasi ROUGE & BERTScore
+            </h4>
+            <div id="baseline-stats" class="space-y-md rouge-bars-section"></div>
+            <div class="flex items-center gap-md text-label-sm">
+              <div class="flex items-center gap-1">
+                <div class="w-3 h-3 rounded-full bg-primary"></div>
+                <span class="text-on-surface-variant">mT5-small (Abstraktif)</span>
+              </div>
+              <div class="flex items-center gap-1">
+                <div class="w-3 h-3 rounded-full bg-on-surface-variant/30"></div>
+                <span class="text-on-surface-variant">TextRank (Ekstraktif)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Scorecard table -->
+          <div class="bg-white rounded-xl p-lg border border-outline-variant/30 shadow-[0_4px_20px_rgba(17,24,39,0.05)]">
+            <h4 class="text-headline-md mb-md flex items-center gap-2">
+              <span class="material-symbols-outlined text-secondary text-[20px] fill">emoji_events</span>
+              Scorecard Lengkap
+            </h4>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b border-outline-variant/30">
+                    <th class="text-left py-2 pr-3 text-label-md text-on-surface-variant">Metrik</th>
+                    <th class="text-center py-2 px-2 text-label-md text-on-surface-variant">TextRank</th>
+                    <th class="text-center py-2 px-2 text-label-md text-primary">mT5</th>
+                    <th class="text-center py-2 pl-2 text-label-md text-on-surface-variant/60">Winner</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-outline-variant/20">
+                  <tr class="hover:bg-surface-container-low transition-colors">
+                    <td class="py-2 pr-3 text-label-md text-on-surface">ROUGE-1</td>
+                    <td class="py-2 px-2 text-center font-bold text-secondary">0.6623</td>
+                    <td class="py-2 px-2 text-center text-on-surface-variant">0.5555</td>
+                    <td class="py-2 pl-2 text-center text-xs font-bold text-on-surface-variant">TextRank ✓</td>
+                  </tr>
+                  <tr class="hover:bg-surface-container-low transition-colors">
+                    <td class="py-2 pr-3 text-label-md text-on-surface">ROUGE-2</td>
+                    <td class="py-2 px-2 text-center font-bold text-secondary">0.5953</td>
+                    <td class="py-2 px-2 text-center text-on-surface-variant">0.4684</td>
+                    <td class="py-2 pl-2 text-center text-xs font-bold text-on-surface-variant">TextRank ✓</td>
+                  </tr>
+                  <tr class="hover:bg-surface-container-low transition-colors">
+                    <td class="py-2 pr-3 text-label-md text-on-surface">ROUGE-L</td>
+                    <td class="py-2 px-2 text-center font-bold text-secondary">0.6293</td>
+                    <td class="py-2 px-2 text-center text-on-surface-variant">0.5121</td>
+                    <td class="py-2 pl-2 text-center text-xs font-bold text-on-surface-variant">TextRank ✓</td>
+                  </tr>
+                  <tr class="hover:bg-surface-container-low transition-colors">
+                    <td class="py-2 pr-3 text-label-md text-on-surface">BERTScore-P</td>
+                    <td class="py-2 px-2 text-center font-bold text-secondary">0.8423</td>
+                    <td class="py-2 px-2 text-center text-on-surface-variant">0.8235</td>
+                    <td class="py-2 pl-2 text-center text-xs font-bold text-on-surface-variant">TextRank ✓</td>
+                  </tr>
+                  <tr class="hover:bg-surface-container-low transition-colors">
+                    <td class="py-2 pr-3 text-label-md text-on-surface">BERTScore-R</td>
+                    <td class="py-2 px-2 text-center font-bold text-secondary">0.8456</td>
+                    <td class="py-2 px-2 text-center text-on-surface-variant">0.8006</td>
+                    <td class="py-2 pl-2 text-center text-xs font-bold text-on-surface-variant">TextRank ✓</td>
+                  </tr>
+                  <tr class="hover:bg-surface-container-low transition-colors">
+                    <td class="py-2 pr-3 text-label-md text-on-surface">BERTScore-F1</td>
+                    <td class="py-2 px-2 text-center font-bold text-secondary">0.8432</td>
+                    <td class="py-2 px-2 text-center text-on-surface-variant">0.8113</td>
+                    <td class="py-2 pl-2 text-center text-xs font-bold text-on-surface-variant">TextRank ✓</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Insight note -->
+            <div class="mt-md p-3 rounded-lg bg-primary/5 border border-primary/15">
+              <p class="text-[12px] text-on-surface-variant leading-relaxed">
+                <span class="font-bold text-primary">Catatan:</span>
+                TextRank unggul di ROUGE karena menyalin kata asli persis (n-gram overlap tinggi).
+                Selisih BERTScore hanya <strong>0.03</strong> — mT5 menghasilkan makna yang hampir setara
+                meski menggunakan pilihan kata berbeda. Dengan lebih banyak data training (71K+ tersedia),
+                performa mT5 diperkirakan meningkat signifikan.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════ TENTANG SECTION ════════════════════════════════ -->
+      <section id="tentang" class="grid grid-cols-1 md:grid-cols-3 gap-lg">
+
+        <div class="bg-white rounded-xl p-lg border border-outline-variant/30 space-y-sm hover:shadow-md transition-shadow">
+          <span class="material-symbols-outlined text-primary text-[32px] fill">model_training</span>
+          <h4 class="text-headline-md">Model Abstraktif</h4>
+          <p class="text-body-md text-on-surface-variant">
+            mT5-small (300M parameter) di-fine-tune pada 10.000 sampel IndoSum selama 3 epoch
+            menggunakan Google Colab Tesla T4. Menghasilkan kalimat baru dari sari teks.
+          </p>
+        </div>
+
+        <div class="bg-white rounded-xl p-lg border border-outline-variant/30 space-y-sm hover:shadow-md transition-shadow">
+          <span class="material-symbols-outlined text-secondary text-[32px] fill">account_tree</span>
+          <h4 class="text-headline-md">Algoritma Ekstraktif</h4>
+          <p class="text-body-md text-on-surface-variant">
+            TextRank membangun graf kemiripan antar kalimat menggunakan cosine similarity
+            dan Power Iteration (PageRank) untuk memilih kalimat paling representatif.
+          </p>
+        </div>
+
+        <div class="bg-white rounded-xl p-lg border border-outline-variant/30 space-y-sm hover:shadow-md transition-shadow">
+          <span class="material-symbols-outlined text-tertiary text-[32px] fill">dataset</span>
+          <h4 class="text-headline-md">Dataset IndoSum</h4>
+          <p class="text-body-md text-on-surface-variant">
+            93.870 pasangan artikel–ringkasan dari berita Indonesia.
+            Split: 71.214 train / 10.957 validation / 11.699 test.
+            Sumber: Detik, Okezone, Tribun, Liputan6, dll.
+          </p>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ══════════════════════ FOOTER ══════════════════════════════════════════ -->
+  <footer class="relative z-10 bg-surface-container-lowest border-t border-outline-variant/30 py-lg px-md mt-xl">
+    <div class="max-w-container-max mx-auto flex flex-col md:flex-row items-center justify-between gap-md">
+      <div class="flex flex-col items-center md:items-start gap-xs">
+        <div class="flex items-center gap-xs">
+          <span class="material-symbols-outlined text-primary text-[22px] fill">auto_stories</span>
+          <span class="text-headline-md font-bold text-primary">IntiBerita</span>
+        </div>
+        <p class="text-label-md text-on-surface-variant">© 2025 · Studi Komparasi mT5 vs TextRank · IndoSum</p>
+      </div>
+
+      <div class="flex gap-lg">
+        <a href="#demo"     class="text-label-md text-on-surface-variant hover:text-primary transition-colors">Demo</a>
+        <a href="#evaluasi" class="text-label-md text-on-surface-variant hover:text-primary transition-colors">Evaluasi</a>
+        <a href="#tentang"  class="text-label-md text-on-surface-variant hover:text-primary transition-colors">Tentang</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Scripts (order matters) -->
+  <script src="{{ url_for('static', filename='tailwind.config.js') }}"></script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+  <script src="{{ url_for('static', filename='shader.js') }}"></script>
+
+</body>
+</html>
