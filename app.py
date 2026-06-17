@@ -7,14 +7,17 @@ import numpy as np
 from collections import defaultdict
 from flask import Flask, request, jsonify, render_template
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
 import torch
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+
+load_dotenv()  # baca file .env di folder yang sama dengan app.py
 
 app = Flask(__name__)
 
 # ─── Constants ───────────────────────────────────────────────────────────────
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "best_mt5_model")
-NEWS_API_KEY = "440da492f3384e9b8f6aa5d8be8c8ae4"
+NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "")
 
 # Length presets
 LENGTH_PRESETS = {

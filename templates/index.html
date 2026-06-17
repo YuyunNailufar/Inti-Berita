@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IntiBerita — Ringkasan berita Bahasa Indonesia berbasis mT5</title>
+  <title>RingkasKilat — Ringkasan Teks Otomatis AI</title>
 
   <!-- Tailwind CDN -->
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
@@ -28,7 +28,7 @@
       <!-- Logo -->
       <div class="flex items-center gap-xs">
         <span class="material-symbols-outlined text-primary text-[28px] fill">auto_stories</span>
-        <h1 class="text-headline-lg font-bold text-primary">IntiBerita</h1>
+        <h1 class="text-headline-lg font-bold text-primary">RingkasKilat</h1>
       </div>
 
       <!-- Nav -->
@@ -201,13 +201,37 @@
                 </div>
                 <!-- Results -->
                 <div id="search-results" class="space-y-2 max-h-64 overflow-y-auto custom-scrollbar"></div>
+
+                <!-- Preview teks artikel terpilih -->
+                <div id="search-preview-box" class="hidden space-y-2">
+                  <div class="flex items-center justify-between">
+                    <span class="text-label-sm text-on-surface-variant flex items-center gap-1">
+                      <span class="material-symbols-outlined text-[15px]">description</span>
+                      <span id="search-word-count">0 kata</span> · <span id="search-read-time">1 menit baca</span>
+                    </span>
+                    <span id="search-preview-title" class="text-label-sm text-primary font-semibold truncate max-w-[50%]"></span>
+                  </div>
+                  <textarea
+                    id="search-textarea"
+                    class="w-full h-52 p-4 text-body-md bg-surface-container-low border border-outline-variant/30 rounded-xl focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none custom-scrollbar transition-all"
+                    placeholder="Teks artikel akan muncul di sini setelah dipilih…"
+                    readonly></textarea>
+                  <div class="flex justify-end">
+                    <button
+                      id="summarize-btn-search"
+                      class="bg-primary text-on-primary px-7 py-3 rounded-xl text-label-md flex items-center gap-2 hover:shadow-lg hover:-translate-y-0.5 transition-all active:scale-95">
+                      <span class="material-symbols-outlined">auto_awesome</span>
+                      Ringkas Sekarang
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
         <!-- ── Right: Settings Panel ─────────────────────────────────────── -->
-        <aside class="lg:col-span-4">
+        <aside id="config-panel" class="lg:col-span-4">
           <div class="bg-white rounded-xl p-lg shadow-[0_4px_20px_rgba(17,24,39,0.06)] border border-outline-variant/30 space-y-lg">
             <h3 class="text-headline-md">Konfigurasi</h3>
 
@@ -215,21 +239,21 @@
             <div class="space-y-sm">
               <label class="text-label-md text-on-surface-variant">Metode Ringkasan</label>
               <div class="space-y-xs">
-                <label id="method-abs" class="flex items-start gap-sm p-3 rounded-lg border-2 border-primary bg-primary/5 cursor-pointer transition-all">
+                <label id="method-both" data-method="both" class="method-option flex items-start gap-sm p-3 rounded-lg border-2 border-primary bg-primary/5 cursor-pointer transition-all">
                   <input type="radio" name="method" value="both" checked class="mt-0.5 text-primary focus:ring-primary">
                   <div>
                     <p class="text-label-md text-on-surface font-semibold">Keduanya (Default)</p>
                     <p class="text-[11px] text-on-surface-variant/70 mt-0.5">Tampilkan Abstraktif & Ekstraktif sekaligus untuk perbandingan.</p>
                   </div>
                 </label>
-                <label class="flex items-start gap-sm p-3 rounded-lg border-2 border-outline-variant/30 hover:bg-surface-container cursor-pointer transition-all">
+                <label id="method-abs" data-method="abstractive" class="method-option flex items-start gap-sm p-3 rounded-lg border-2 border-outline-variant/30 hover:bg-surface-container cursor-pointer transition-all">
                   <input type="radio" name="method" value="abstractive" class="mt-0.5 text-primary focus:ring-primary">
                   <div>
                     <p class="text-label-md text-on-surface">Abstractive (mT5)</p>
                     <p class="text-[11px] text-on-surface-variant/70 mt-0.5">Menghasilkan kalimat baru yang alami & ringkas.</p>
                   </div>
                 </label>
-                <label class="flex items-start gap-sm p-3 rounded-lg border-2 border-outline-variant/30 hover:bg-surface-container cursor-pointer transition-all">
+                <label id="method-ext" data-method="extractive" class="method-option flex items-start gap-sm p-3 rounded-lg border-2 border-outline-variant/30 hover:bg-surface-container cursor-pointer transition-all">
                   <input type="radio" name="method" value="extractive" class="mt-0.5 text-primary focus:ring-primary">
                   <div>
                     <p class="text-label-md text-on-surface">Extractive (TextRank)</p>
@@ -528,7 +552,7 @@
       <div class="flex flex-col items-center md:items-start gap-xs">
         <div class="flex items-center gap-xs">
           <span class="material-symbols-outlined text-primary text-[22px] fill">auto_stories</span>
-          <span class="text-headline-md font-bold text-primary">IntiBerita</span>
+          <span class="text-headline-md font-bold text-primary">RingkasKilat</span>
         </div>
         <p class="text-label-md text-on-surface-variant">© 2025 · Studi Komparasi mT5 vs TextRank · IndoSum</p>
       </div>
