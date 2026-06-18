@@ -5,6 +5,7 @@ import json
 import requests
 import numpy as np
 from collections import defaultdict
+from pathlib import Path
 from flask import Flask, request, jsonify, render_template
 from bs4 import BeautifulSoup
 import torch
@@ -13,27 +14,37 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 app = Flask(__name__)
 
 # ─── Constants ───────────────────────────────────────────────────────────────
-MODEL_DIR = os.path.join(os.path.dirname(__file__), "best_mt5_model")
+# Pakai Path(__file__).resolve().parent agar path selalu relatif ke file ini,
+# bukan ke working directory saat server dijalankan.
+MODEL_DIR = str(Path(__file__).resolve().parent / "best_mt5_model")
 NEWS_API_KEY = "440da492f3384e9b8f6aa5d8be8c8ae4"
 
 # Length presets
 LENGTH_PRESETS = {
-    1: {"max_new_tokens": 60,  "min_new_tokens": 20, "extractive_sentences": 2},
-    2: {"max_new_tokens": 120, "min_new_tokens": 40, "extractive_sentences": 3},
-    3: {"max_new_tokens": 200, "min_new_tokens": 70, "extractive_sentences": 5},
+    1: {"max_new_tokens": 80,  "min_new_tokens": 30, "extractive_sentences": 2},
+    2: {"max_new_tokens": 160, "min_new_tokens": 60, "extractive_sentences": 3},
+    3: {"max_new_tokens": 256, "min_new_tokens": 100, "extractive_sentences": 5},
 }
 
 # ─── Model Loading ────────────────────────────────────────────────────────────
-print("Loading mT5 model…")
+print(f"Loading mT5 model dari: {MODEL_DIR}")
 try:
+    if not Path(MODEL_DIR).exists():
+        raise FileNotFoundError(f"Folder model tidak ditemukan: {MODEL_DIR}")
     tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR)
-    model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_DIR)
+    model = AutoModelForSeq2SeqLM.from_pretrained(
+        MODEL_DIR,
+        torch_dtype=torch.float32,
+        low_cpu_mem_usage=True,
+    )
     model.eval()
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device)
-    print(f"Model loaded on {device}")
+    print(f"✓ Model berhasil dimuat pada {device}")
 except Exception as e:
-    print(f"[WARN] Model load failed: {e}")
+    import traceback
+    print(f"[ERROR] Model load gagal: {e}")
+    traceback.print_exc()
     tokenizer = None
     model = None
     device = "cpu"
@@ -115,13 +126,20 @@ def mt5_summarize(text: str, max_new_tokens: int = 120, min_new_tokens: int = 40
             max_new_tokens=max_new_tokens,
             min_new_tokens=min_new_tokens,
             num_beams=4,
-            length_penalty=1.5,
-            no_repeat_ngram_size=3,
+            length_penalty=2.0,       # dorong model hasilkan kalimat lebih lengkap
+            no_repeat_ngram_size=2,   # turunkan dari 3 agar tidak terlalu ketat
             early_stopping=True,
+            forced_eos_token_id=tokenizer.eos_token_id,
         )
 
     summary = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    return summary.strip()
+    # Pastikan summary berakhir di kalimat yang lengkap
+    summary = summary.strip()
+    if summary and summary[-1] not in '.!?':
+        last_end = max(summary.rfind('.'), summary.rfind('!'), summary.rfind('?'))
+        if last_end > len(summary) // 2:  # ada titik di separuh akhir
+            summary = summary[:last_end + 1]
+    return summary
 
 
 # ─── ROUGE Score (lightweight, no dependencies) ──────────────────────────────
@@ -241,14 +259,19 @@ def summarize():
     text = (data.get("text") or "").strip()
     length_level = int(data.get("length", 2))  # 1, 2, 3
     focus_keywords = data.get("focusKeywords", False)
+    method = data.get("method", "both")  # both | abstractive | extractive
 
     if not text or len(text) < 50:
         return jsonify({"error": "Teks terlalu pendek (min. 50 karakter)."}), 400
 
     preset = LENGTH_PRESETS.get(length_level, LENGTH_PRESETS[2])
+    orig_words = len(text.split())
+    reference = " ".join(text.split()[:100])
 
-    # If focusKeywords, extract top keywords and prepend to text for better context
-    if focus_keywords:
+    # Keyword extraction (hanya jika dibutuhkan oleh abstractive)
+    top_kw = []
+    input_text = text
+    if focus_keywords and method in ("both", "abstractive"):
         words = tokenize_rouge(text)
         freq = defaultdict(int)
         stopwords_id = {
@@ -256,60 +279,46 @@ def summarize():
             "adalah","akan","telah","dalam","oleh","tidak","ada","juga","sudah",
             "saat","bisa","agar","serta","karena","tetapi","namun","seperti",
             "setelah","sebelum","antara","lebih","sangat","hanya","tersebut",
-            "mereka","kami","kita","saya","anda","dia","ia","nya","nya","an",
+            "mereka","kami","kita","saya","anda","dia","ia","nya","an",
         }
         for w in words:
             if w not in stopwords_id and len(w) > 3:
                 freq[w] += 1
         top_kw = sorted(freq, key=freq.get, reverse=True)[:8]
-        keyword_prefix = "Kata kunci: " + ", ".join(top_kw) + ". "
-        input_text = keyword_prefix + text
-    else:
-        input_text = text
-        top_kw = []
+        input_text = "Kata kunci: " + ", ".join(top_kw) + ". " + text
 
-    # Abstractive
-    abstractive_text = mt5_summarize(
-        input_text,
-        max_new_tokens=preset["max_new_tokens"],
-        min_new_tokens=preset["min_new_tokens"],
-    )
+    result = {"keywords": top_kw, "originalWordCount": orig_words}
 
-    # Extractive
-    extractive_text, extractive_sentences = textrank_summarize(
-        text, num_sentences=preset["extractive_sentences"]
-    )
-
-    # Metrics (compare both summaries against each other as proxy, since no reference)
-    # Also compute self-metrics vs original (first 512 chars as reference)
-    reference = " ".join(text.split()[:100])  # first 100 words as reference proxy
-    abs_metrics = compute_metrics(abstractive_text, reference)
-    ext_metrics = compute_metrics(extractive_text, reference)
-
-    # Word count
-    abs_words = len(abstractive_text.split())
-    ext_words = len(extractive_text.split())
-    orig_words = len(text.split())
-    compression_abs = round((1 - abs_words / max(orig_words, 1)) * 100, 1)
-    compression_ext = round((1 - ext_words / max(orig_words, 1)) * 100, 1)
-
-    return jsonify({
-        "abstractive": {
+    # ── Abstractive (hanya jika method = both atau abstractive)
+    if method in ("both", "abstractive"):
+        abstractive_text = mt5_summarize(
+            input_text,
+            max_new_tokens=preset["max_new_tokens"],
+            min_new_tokens=preset["min_new_tokens"],
+        )
+        abs_words = len(abstractive_text.split())
+        result["abstractive"] = {
             "text": abstractive_text,
             "wordCount": abs_words,
-            "compression": compression_abs,
-            "metrics": abs_metrics,
-        },
-        "extractive": {
+            "compression": round((1 - abs_words / max(orig_words, 1)) * 100, 1),
+            "metrics": compute_metrics(abstractive_text, reference),
+        }
+
+    # ── Extractive (hanya jika method = both atau extractive)
+    if method in ("both", "extractive"):
+        extractive_text, extractive_sentences = textrank_summarize(
+            text, num_sentences=preset["extractive_sentences"]
+        )
+        ext_words = len(extractive_text.split())
+        result["extractive"] = {
             "text": extractive_text,
             "sentences": extractive_sentences,
             "wordCount": ext_words,
-            "compression": compression_ext,
-            "metrics": ext_metrics,
-        },
-        "keywords": top_kw,
-        "originalWordCount": orig_words,
-    })
+            "compression": round((1 - ext_words / max(orig_words, 1)) * 100, 1),
+            "metrics": compute_metrics(extractive_text, reference),
+        }
+
+    return jsonify(result)
 
 
 @app.route("/api/scrape", methods=["POST"])

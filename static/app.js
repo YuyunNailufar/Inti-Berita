@@ -13,6 +13,7 @@ const BASELINE = {
 // ─── STATE ────────────────────────────────────────────────────────────────────
 const state = {
   activeTab: "paste",       // paste | url | search
+  method: "both",           // both | abstractive | extractive
   lengthLevel: 2,           // 1 | 2 | 3
   focusKeywords: true,
   isLoading: false,
@@ -48,6 +49,7 @@ const DOM = {
   slider:        () => $("length-slider"),
   sliderLabel:   () => $("slider-label"),
   toggleKw:      () => $("toggle-keywords"),
+  methodBothBtn: () => $("method-both"),
   methodAbsBtn:  () => $("method-abs"),
   methodExtBtn:  () => $("method-ext"),
 
@@ -161,6 +163,40 @@ function debounce(fn, ms) {
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }
 
+// ─── METHOD RADIO ─────────────────────────────────────────────────────────────
+function initMethodRadio() {
+  const radios = document.querySelectorAll('input[name="method"]');
+  const labels = {
+    both:        DOM.methodBothBtn,
+    abstractive: DOM.methodAbsBtn,
+    extractive:  DOM.methodExtBtn,
+  };
+
+  function updateHighlight(selectedValue) {
+    Object.entries(labels).forEach(([value, getLabel]) => {
+      const label = getLabel();
+      if (!label) return;
+      if (value === selectedValue) {
+        label.classList.add("border-primary", "bg-primary/5");
+        label.classList.remove("border-outline-variant/30");
+      } else {
+        label.classList.remove("border-primary", "bg-primary/5");
+        label.classList.add("border-outline-variant/30");
+      }
+    });
+  }
+
+  // Set initial state (both is checked by default)
+  updateHighlight("both");
+
+  radios.forEach((radio) => {
+    radio.addEventListener("change", () => {
+      state.method = radio.value;
+      updateHighlight(radio.value);
+    });
+  });
+}
+
 // ─── SLIDER ───────────────────────────────────────────────────────────────────
 function initSlider() {
   const slider = DOM.slider();
@@ -208,7 +244,19 @@ async function fetchUrl() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Gagal mengambil URL.");
 
-    // Fill textarea & switch to paste panel view
+    // Isi url-textarea dan tampilkan preview box
+    const urlTextarea = $("url-textarea");
+    if (urlTextarea) {
+      urlTextarea.value = data.text;
+      urlTextarea.removeAttribute("readonly");
+    }
+    $("url-preview-box")?.classList.remove("hidden");
+    const urlWordCount = $("url-word-count");
+    const urlReadTime  = $("url-read-time");
+    if (urlWordCount) urlWordCount.textContent = `${data.wordCount} kata`;
+    if (urlReadTime)  urlReadTime.textContent  = `${data.readTime} menit baca`;
+
+    // Juga isi main textarea untuk fallback summarize
     DOM.textarea().value = data.text;
     updateWordCount();
     if (status) {
@@ -316,6 +364,15 @@ function formatDate(iso) {
 // ─── SUMMARIZE ────────────────────────────────────────────────────────────────
 function initSummarize() {
   DOM.summarizeBtn()?.addEventListener("click", doSummarize);
+  // Tombol "Ringkas Sekarang" di panel URL
+  $("summarize-btn-url")?.addEventListener("click", () => {
+    const urlText = $("url-textarea")?.value?.trim();
+    if (urlText) {
+      DOM.textarea().value = urlText;
+      updateWordCount();
+    }
+    doSummarize();
+  });
   DOM.newBtn()?.addEventListener("click", resetUI);
 }
 
@@ -338,6 +395,7 @@ async function doSummarize() {
         text,
         length: state.lengthLevel,
         focusKeywords: state.focusKeywords,
+        method: state.method,
       }),
     });
     const data = await res.json();
@@ -345,6 +403,7 @@ async function doSummarize() {
 
     state.lastResult = data;
     renderResults(data);
+
     DOM.resultsSection()?.scrollIntoView({ behavior: "smooth", block: "start" });
     showToast("Ringkasan berhasil dibuat!");
   } catch (err) {
@@ -361,14 +420,20 @@ function showSkeletonResults() {
   if (!section) return;
   section.classList.remove("hidden");
 
-  if (DOM.absText()) DOM.absText().innerHTML = `
+  const m = state.method;
+
+  // Show/hide cards berdasarkan metode dipilih
+  DOM.absCard()?.classList.toggle("hidden", m === "extractive");
+  DOM.extCard()?.classList.toggle("hidden", m === "abstractive");
+
+  if (m !== "extractive" && DOM.absText()) DOM.absText().innerHTML = `
     <div class="space-y-2">
       <div class="skeleton h-4 w-full"></div>
       <div class="skeleton h-4 w-5/6"></div>
       <div class="skeleton h-4 w-4/6"></div>
     </div>`;
 
-  if (DOM.extList()) DOM.extList().innerHTML = `
+  if (m !== "abstractive" && DOM.extList()) DOM.extList().innerHTML = `
     <div class="space-y-3">
       ${Array(3).fill(0).map(() => `
         <div class="flex gap-3">
@@ -385,31 +450,32 @@ function hideSkeletonResults() {
 // ─── RENDER RESULTS ───────────────────────────────────────────────────────────
 function renderResults(data) {
   const { abstractive, extractive, keywords } = data;
+  const m = state.method;
 
-  // ── Abstractive text
-  if (DOM.absText()) {
+  // ── Show/hide cards sesuai metode
+  DOM.absCard()?.classList.toggle("hidden", m === "extractive");
+  DOM.extCard()?.classList.toggle("hidden", m === "abstractive");
+
+  // ── Abstractive text (hanya kalau ada di response)
+  if (abstractive && DOM.absText()) {
     DOM.absText().textContent = abstractive.text;
     DOM.absText().classList.add("fade-in");
+    renderMetricBadges(DOM.absBadges(), abstractive.metrics, "abs");
+    if (DOM.absWordCount())   DOM.absWordCount().textContent   = `${abstractive.wordCount} kata`;
+    if (DOM.absCompression()) DOM.absCompression().textContent = `−${abstractive.compression}%`;
   }
 
-  // ── Extractive sentences list
-  if (DOM.extList()) {
+  // ── Extractive sentences list (hanya kalau ada di response)
+  if (extractive && DOM.extList()) {
     DOM.extList().innerHTML = (extractive.sentences || [extractive.text]).map((s, i) => `
       <div class="sentence-item fade-in" style="animation-delay:${i * 80}ms">
         <span class="sentence-number">${i + 1}</span>
         <p class="font-body-md text-body-md text-on-surface leading-relaxed">${s}</p>
       </div>`).join("");
+    renderMetricBadges(DOM.extBadges(), extractive.metrics, "ext");
+    if (DOM.extWordCount())   DOM.extWordCount().textContent   = `${extractive.wordCount} kata`;
+    if (DOM.extCompression()) DOM.extCompression().textContent = `−${extractive.compression}%`;
   }
-
-  // ── Metric badges — Abstractive
-  renderMetricBadges(DOM.absBadges(), abstractive.metrics, "abs");
-  renderMetricBadges(DOM.extBadges(), extractive.metrics, "ext");
-
-  // ── Word count / compression
-  if (DOM.absWordCount())   DOM.absWordCount().textContent   = `${abstractive.wordCount} kata`;
-  if (DOM.extWordCount())   DOM.extWordCount().textContent   = `${extractive.wordCount} kata`;
-  if (DOM.absCompression()) DOM.absCompression().textContent = `−${abstractive.compression}%`;
-  if (DOM.extCompression()) DOM.extCompression().textContent = `−${extractive.compression}%`;
 
   // ── Keywords
   if (keywords?.length && DOM.keywordSection()) {
@@ -419,8 +485,14 @@ function renderResults(data) {
     ).join("");
   }
 
-  // ── Comparison table
-  renderComparisonTable(abstractive.metrics, extractive.metrics);
+  // ── Comparison table — hanya tampil kalau keduanya ada
+  const compTableWrapper = DOM.compTable()?.closest(".bg-white.rounded-xl.border");
+  if (m === "both" && abstractive && extractive) {
+    renderComparisonTable(abstractive.metrics, extractive.metrics);
+    compTableWrapper?.classList.remove("hidden");
+  } else {
+    compTableWrapper?.classList.add("hidden");
+  }
 
   DOM.resultsSection()?.classList.remove("hidden");
 }
@@ -629,6 +701,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initTextarea();
   initSlider();
   initToggle();
+  initMethodRadio();
   initUrlFetch();
   initNewsSearch();
   initSummarize();

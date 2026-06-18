@@ -215,21 +215,21 @@
             <div class="space-y-sm">
               <label class="text-label-md text-on-surface-variant">Metode Ringkasan</label>
               <div class="space-y-xs">
-                <label id="method-abs" class="flex items-start gap-sm p-3 rounded-lg border-2 border-primary bg-primary/5 cursor-pointer transition-all">
+                <label id="method-both" class="flex items-start gap-sm p-3 rounded-lg border-2 border-outline-variant/30 hover:bg-surface-container cursor-pointer transition-all">
                   <input type="radio" name="method" value="both" checked class="mt-0.5 text-primary focus:ring-primary">
                   <div>
                     <p class="text-label-md text-on-surface font-semibold">Keduanya (Default)</p>
                     <p class="text-[11px] text-on-surface-variant/70 mt-0.5">Tampilkan Abstraktif & Ekstraktif sekaligus untuk perbandingan.</p>
                   </div>
                 </label>
-                <label class="flex items-start gap-sm p-3 rounded-lg border-2 border-outline-variant/30 hover:bg-surface-container cursor-pointer transition-all">
+                <label id="method-abs" class="flex items-start gap-sm p-3 rounded-lg border-2 border-outline-variant/30 hover:bg-surface-container cursor-pointer transition-all">
                   <input type="radio" name="method" value="abstractive" class="mt-0.5 text-primary focus:ring-primary">
                   <div>
                     <p class="text-label-md text-on-surface">Abstractive (mT5)</p>
                     <p class="text-[11px] text-on-surface-variant/70 mt-0.5">Menghasilkan kalimat baru yang alami & ringkas.</p>
                   </div>
                 </label>
-                <label class="flex items-start gap-sm p-3 rounded-lg border-2 border-outline-variant/30 hover:bg-surface-container cursor-pointer transition-all">
+                <label id="method-ext" class="flex items-start gap-sm p-3 rounded-lg border-2 border-outline-variant/30 hover:bg-surface-container cursor-pointer transition-all">
                   <input type="radio" name="method" value="extractive" class="mt-0.5 text-primary focus:ring-primary">
                   <div>
                     <p class="text-label-md text-on-surface">Extractive (TextRank)</p>
