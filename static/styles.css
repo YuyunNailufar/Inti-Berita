@@ -256,3 +256,104 @@ input[type="range"]::-moz-range-thumb {
   color: #0058be;
   font-weight: bold;
 }
+
+/* ── Print (Export PDF Native) ───────────────────────────────────────────────*/
+@media print {
+  @page {
+    margin: 20mm;
+    size: a4 portrait;
+  }
+
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important; /* Gunakan hitam pekat untuk teks agar tajam dicetak */
+  }
+
+  /* Menggunakan display: none secara agresif untuk semua elemen UI yang tidak perlu */
+  header, 
+  footer,
+  canvas, 
+  #hero, 
+  #evaluasi,
+  #tentang,
+  #demo > div:first-child, 
+  #config-panel, /* Panel Konfigurasi (Metode, Panjang Ringkasan) */
+  .toast, /* Pop-up notifikasi (misal: "Membuka menu Ekspor PDF...") */
+  #results-section > div.flex.items-center.justify-between, /* Header "Hasil Ringkasan" */
+  #results-section > div.bg-white, /* Tabel Perbandingan Metrik */
+  #results-section > div.flex.justify-center, /* Tombol Ringkas Teks Baru */
+  #keyword-section, /* Kata Kunci */
+  #abs-badges, #ext-badges, /* Skor ROUGE */
+  #abs-card > div:last-child, /* Footer kata/kompresi Abstraktif */
+  #ext-card > div:last-child, /* Footer kata/kompresi Ekstraktif */
+  .result-card p.italic, /* Deskripsi sub-judul kartu */
+  .baseline-stats, /* Statistik Baseline (jika ada) */
+  #results-section button, /* Semua tombol */
+  ::-webkit-scrollbar {
+    display: none !important;
+  }
+  
+  #results-section {
+    position: relative;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    display: block !important;
+  }
+  
+  /* Buat judul laporan otomatis di paling atas dokumen PDF */
+  #results-section::before {
+    content: "Laporan Hasil Ringkasan Otomatis";
+    display: block;
+    font-size: 18pt;
+    font-weight: bold;
+    color: #000000;
+    margin-bottom: 24px;
+    border-bottom: 2px solid #000000;
+    padding-bottom: 12px;
+  }
+  
+  /* Ubah layout Grid 2 Kolom menjadi vertikal bersusun (Block) */
+  #results-section .grid {
+    display: block !important;
+  }
+  
+  /* HANGUSKAN semua hiasan kartu: jadikan teks polos biasa */
+  .result-card {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    box-shadow: none !important;
+    border: none !important;
+    background-color: transparent !important;
+    padding: 0 !important;
+    margin-bottom: 32px !important;
+  }
+
+  /* Ubah desain badge judul kartu (Abstraktif/Ekstraktif) menjadi Header/Sub-judul biasa */
+  .result-card span.bg-primary\/10,
+  .result-card span.bg-surface-container-highest {
+    background: transparent !important;
+    color: #000000 !important;
+    font-size: 14pt !important;
+    font-weight: bold !important;
+    padding: 0 !important;
+    display: block;
+    margin-bottom: 12px !important;
+  }
+  
+  /* Tampilkan semua teks panjang tanpa scroll */
+  .custom-scrollbar, #abs-text, #ext-list {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  /* Rapikan font teks isinya */
+  #abs-text, #ext-list {
+    font-size: 11pt !important;
+    line-height: 1.6 !important;
+    text-align: justify !important;
+  }
+}
+
+
