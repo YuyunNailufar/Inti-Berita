@@ -820,26 +820,18 @@ function speakText(text) {
 }
 
 function exportPdf() {
-  const section = DOM.resultsSection();
-  if (!section || !state.lastResult) return;
+  if (!state.lastResult) return;
   
-  // Sembunyikan tombol-tombol yang tidak perlu ada di PDF
-  const hideEls = section.querySelectorAll("button");
-  hideEls.forEach(el => el.style.display = 'none');
+  // Memanfaatkan fitur native "Print to PDF" dari browser.
+  // Jauh lebih bersih, teks bisa di-copy, file sangat kecil, dan anti-bug potong halaman.
+  // CSS khusus @media print sudah ditambahkan di styles.css untuk merapikan layoutnya.
   
-  const opt = {
-    margin:       [0.5, 0.5, 0.5, 0.5],
-    filename:     `RingkasKilat_${Date.now()}.pdf`,
-    image:        { type: 'jpeg', quality: 0.98 },
-    html2canvas:  { scale: 2, useCORS: true },
-    jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
-  };
+  showToast("Membuka menu Ekspor PDF...", "success");
   
-  showToast("Menyiapkan PDF...", "success");
-  html2pdf().set(opt).from(section).save().then(() => {
-    hideEls.forEach(el => el.style.display = '');
-    showToast("PDF berhasil diunduh!", "success");
-  });
+  // Berikan sedikit jeda agar animasi selesai sebelum print dialog terbuka
+  setTimeout(() => {
+    window.print();
+  }, 300);
 }
 
 function exportTxt() {
