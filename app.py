@@ -6,11 +6,15 @@ import requests
 import numpy as np
 from collections import defaultdict
 from pathlib import Path
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, Response, stream_with_context
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 import torch
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, TextIteratorStreamer
+import io
+import PyPDF2
+from docx import Document
+from threading import Thread
 
 load_dotenv()  # baca file .env di folder yang sama dengan app.py
 
@@ -144,6 +148,39 @@ def mt5_summarize(text: str, max_new_tokens: int = 120, min_new_tokens: int = 40
             summary = summary[:last_end + 1]
     return summary
 
+def mt5_summarize_stream(text: str, max_new_tokens: int = 120, min_new_tokens: int = 40):
+    if model is None or tokenizer is None:
+        yield "[Model tidak tersedia. Pastikan folder best_mt5_model ada dan valid.]"
+        return
+
+    prefix = "summarize: "
+    inputs = tokenizer(
+        prefix + text,
+        return_tensors="pt",
+        max_length=512,
+        truncation=True,
+        padding=True,
+    ).to(device)
+
+    streamer = TextIteratorStreamer(tokenizer, skip_special_tokens=True)
+    generation_kwargs = dict(
+        **inputs,
+        max_new_tokens=max_new_tokens,
+        min_new_tokens=min_new_tokens,
+        num_beams=1,
+        length_penalty=2.0,
+        no_repeat_ngram_size=2,
+        early_stopping=True,
+        forced_eos_token_id=tokenizer.eos_token_id,
+        streamer=streamer
+    )
+
+    thread = Thread(target=model.generate, kwargs=generation_kwargs)
+    thread.start()
+
+    for new_text in streamer:
+        yield new_text
+
 
 # ─── ROUGE Score (lightweight, no dependencies) ──────────────────────────────
 def tokenize_rouge(text: str) -> list[str]:
@@ -219,6 +256,30 @@ def scrape_url(url: str) -> str:
     return text.strip()
 
 
+# ─── Document Extraction ──────────────────────────────────────────────────────
+def extract_text_from_pdf(file_stream) -> str:
+    try:
+        reader = PyPDF2.PdfReader(file_stream)
+        text = []
+        for page in reader.pages:
+            t = page.extract_text()
+            if t:
+                text.append(t)
+        return "\n".join(text).strip()
+    except Exception as e:
+        print(f"[ERROR] PDF extraction failed: {e}")
+        return ""
+
+def extract_text_from_docx(file_stream) -> str:
+    try:
+        doc = Document(file_stream)
+        text = [para.text for para in doc.paragraphs if para.text.strip()]
+        return "\n".join(text).strip()
+    except Exception as e:
+        print(f"[ERROR] DOCX extraction failed: {e}")
+        return ""
+
+
 # ─── News API ─────────────────────────────────────────────────────────────────
 def search_news(query: str) -> list[dict]:
     if not NEWS_API_KEY:
@@ -255,6 +316,29 @@ def search_news(query: str) -> list[dict]:
 def index():
     return render_template("index.html")
 
+@app.route("/api/upload", methods=["POST"])
+def upload_file():
+    if "file" not in request.files:
+        return jsonify({"error": "Tidak ada file yang diunggah."}), 400
+    
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "File tidak valid."}), 400
+    
+    filename = file.filename.lower()
+    if filename.endswith(".pdf"):
+        text = extract_text_from_pdf(file.stream)
+    elif filename.endswith(".docx"):
+        text = extract_text_from_docx(file.stream)
+    else:
+        return jsonify({"error": "Format file tidak didukung. Harap unggah PDF atau DOCX."}), 400
+    
+    if not text or len(text) < 50:
+        return jsonify({"error": "Gagal mengekstrak teks atau teks terlalu pendek."}), 400
+        
+    word_count = len(text.split())
+    read_time = max(1, round(word_count / 200))
+    return jsonify({"text": text, "wordCount": word_count, "readTime": read_time})
 
 @app.route("/api/summarize", methods=["POST"])
 def summarize():
@@ -322,6 +406,84 @@ def summarize():
         }
 
     return jsonify(result)
+
+@app.route("/api/summarize-stream", methods=["POST"])
+def summarize_stream():
+    data = request.get_json(force=True)
+    text = (data.get("text") or "").strip()
+    length_level = int(data.get("length", 2))
+    focus_keywords = data.get("focusKeywords", False)
+    method = data.get("method", "both")
+
+    if not text or len(text) < 50:
+        return jsonify({"error": "Teks terlalu pendek (min. 50 karakter)."}), 400
+
+    preset = LENGTH_PRESETS.get(length_level, LENGTH_PRESETS[2])
+    orig_words = len(text.split())
+    reference = " ".join(text.split()[:100])
+
+    top_kw = []
+    input_text = text
+    if focus_keywords and method in ("both", "abstractive"):
+        words = tokenize_rouge(text)
+        freq = defaultdict(int)
+        stopwords_id = {
+            "yang","dan","di","ke","dari","dengan","untuk","ini","itu","pada",
+            "adalah","akan","telah","dalam","oleh","tidak","ada","juga","sudah",
+            "saat","bisa","agar","serta","karena","tetapi","namun","seperti",
+            "setelah","sebelum","antara","lebih","sangat","hanya","tersebut",
+            "mereka","kami","kita","saya","anda","dia","ia","nya","an",
+        }
+        for w in words:
+            if w not in stopwords_id and len(w) > 3:
+                freq[w] += 1
+        top_kw = sorted(freq, key=freq.get, reverse=True)[:8]
+        input_text = "Kata kunci: " + ", ".join(top_kw) + ". " + text
+
+    def generate():
+        init_data = {"type": "init", "keywords": top_kw, "originalWordCount": orig_words}
+        
+        if method in ("both", "extractive"):
+            extractive_text, extractive_sentences = textrank_summarize(text, num_sentences=preset["extractive_sentences"])
+            ext_words = len(extractive_text.split())
+            init_data["extractive"] = {
+                "text": extractive_text,
+                "sentences": extractive_sentences,
+                "wordCount": ext_words,
+                "compression": round((1 - ext_words / max(orig_words, 1)) * 100, 1),
+                "metrics": compute_metrics(extractive_text, reference),
+            }
+            
+        yield f"data: {json.dumps(init_data)}\n\n"
+
+        if method in ("both", "abstractive"):
+            full_abs_text = ""
+            for chunk in mt5_summarize_stream(input_text, preset["max_new_tokens"], preset["min_new_tokens"]):
+                full_abs_text += chunk
+                chunk_data = {"type": "chunk", "text": chunk}
+                yield f"data: {json.dumps(chunk_data)}\n\n"
+            
+            full_abs_text = full_abs_text.strip()
+            if full_abs_text and full_abs_text[-1] not in '.!?':
+                last_end = max(full_abs_text.rfind('.'), full_abs_text.rfind('!'), full_abs_text.rfind('?'))
+                if last_end > len(full_abs_text) // 2:
+                    full_abs_text = full_abs_text[:last_end + 1]
+
+            abs_words = len(full_abs_text.split())
+            final_data = {
+                "type": "done",
+                "abstractive": {
+                    "text": full_abs_text,
+                    "wordCount": abs_words,
+                    "compression": round((1 - abs_words / max(orig_words, 1)) * 100, 1),
+                    "metrics": compute_metrics(full_abs_text, reference)
+                }
+            }
+            yield f"data: {json.dumps(final_data)}\n\n"
+        else:
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+    return Response(stream_with_context(generate()), mimetype="text/event-stream")
 
 
 @app.route("/api/scrape", methods=["POST"])
