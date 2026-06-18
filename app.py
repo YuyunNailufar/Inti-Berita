@@ -20,7 +20,7 @@ app = Flask(__name__)
 # Pakai Path(__file__).resolve().parent agar path selalu relatif ke file ini,
 # bukan ke working directory saat server dijalankan.
 MODEL_DIR = str(Path(__file__).resolve().parent / "best_mt5_model")
-NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "")
+NEWS_API_KEY = "440da492f3384e9b8f6aa5d8be8c8ae4"
 
 # Length presets
 LENGTH_PRESETS = {
