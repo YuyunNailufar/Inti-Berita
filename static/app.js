@@ -29,6 +29,7 @@ const DOM = {
   panelPaste:    () => $("panel-paste"),
   panelUrl:      () => $("panel-url"),
   panelSearch:   () => $("panel-search"),
+  panelDoc:      () => $("panel-doc"),
 
   // Paste panel
   textarea:      () => $("main-textarea"),
@@ -55,6 +56,17 @@ const DOM = {
   searchReadTime:    () => $("search-read-time"),
   searchPreviewTitle:() => $("search-preview-title"),
   summarizeBtnSearch:() => $("summarize-btn-search"),
+
+  // Doc Upload panel
+  dropZone:          () => $("drop-zone"),
+  fileInput:         () => $("file-input"),
+  docPreviewBox:     () => $("doc-preview-box"),
+  docTextarea:       () => $("doc-textarea"),
+  docWordCount:      () => $("doc-word-count"),
+  docReadTime:       () => $("doc-read-time"),
+  docPreviewTitle:   () => $("doc-preview-title"),
+  resetDocBtn:       () => $("reset-doc-btn"),
+  summarizeBtnDoc:   () => $("summarize-btn-doc"),
 
   // Config
   configPanel:   () => $("config-panel"),
@@ -84,10 +96,13 @@ const DOM = {
   compTable:      () => $("comparison-table"),
   newBtn:         () => $("new-btn"),
 
-  // Copy / Export
+  // Copy / Export / TTS
   copyAbsBtn:    () => $("copy-abs"),
   copyExtBtn:    () => $("copy-ext"),
-  exportBtn:     () => $("export-btn"),
+  ttsAbsBtn:     () => $("tts-abs"),
+  ttsExtBtn:     () => $("tts-ext"),
+  exportTxtBtn:  () => $("export-txt-btn"),
+  exportPdfBtn:  () => $("export-pdf-btn"),
 };
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
@@ -105,7 +120,7 @@ function showToast(msg, type = "success") {
 
 function setLoading(on, triggerBtn) {
   state.isLoading = on;
-  const allBtns = [DOM.summarizeBtn(), DOM.summarizeBtnUrl(), DOM.summarizeBtnSearch()].filter(Boolean);
+  const allBtns = [DOM.summarizeBtn(), DOM.summarizeBtnUrl(), DOM.summarizeBtnSearch(), DOM.summarizeBtnDoc()].filter(Boolean);
   const activeBtn = triggerBtn || DOM.summarizeBtn();
   if (!activeBtn) return;
 
@@ -149,7 +164,7 @@ function initTabs() {
       btn.classList.remove("text-on-surface-variant");
 
       // Show/hide panels
-      ["paste", "url", "search"].forEach((t) => {
+      ["paste", "url", "search", "doc"].forEach((t) => {
         const panel = $(`panel-${t}`);
         if (panel) panel.classList.toggle("hidden", t !== tab);
       });
@@ -377,11 +392,94 @@ function formatDate(iso) {
   catch { return ""; }
 }
 
+// ─── DOCUMENT UPLOAD ──────────────────────────────────────────────────────────
+function initDocUpload() {
+  const dropZone = DOM.dropZone();
+  const fileInput = DOM.fileInput();
+  
+  if (!dropZone || !fileInput) return;
+
+  dropZone.addEventListener("click", () => fileInput.click());
+  
+  dropZone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropZone.classList.add("border-primary", "bg-primary/5");
+  });
+  
+  dropZone.addEventListener("dragleave", () => {
+    dropZone.classList.remove("border-primary", "bg-primary/5");
+  });
+  
+  dropZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropZone.classList.remove("border-primary", "bg-primary/5");
+    if (e.dataTransfer.files.length) {
+      handleFileUpload(e.dataTransfer.files[0]);
+    }
+  });
+
+  fileInput.addEventListener("change", (e) => {
+    if (e.target.files.length) {
+      handleFileUpload(e.target.files[0]);
+    }
+  });
+
+  DOM.resetDocBtn()?.addEventListener("click", () => {
+    DOM.docTextarea().value = "";
+    DOM.docPreviewBox().classList.add("hidden");
+    dropZone.classList.remove("hidden");
+    fileInput.value = "";
+  });
+}
+
+async function handleFileUpload(file) {
+  if (file.size > 5 * 1024 * 1024) {
+    showToast("Ukuran file maksimal 5MB.", "error");
+    return;
+  }
+  
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['pdf', 'docx'].includes(ext)) {
+    showToast("Hanya mendukung file .pdf dan .docx", "error");
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const btnText = DOM.dropZone().querySelector("p").textContent;
+  DOM.dropZone().querySelector("p").textContent = "Mengunggah...";
+
+  try {
+    const res = await fetch("/api/upload", {
+      method: "POST",
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Gagal mengekstrak teks.");
+
+    DOM.docTextarea().value = data.text;
+    DOM.docWordCount().textContent = `${data.wordCount} kata`;
+    DOM.docReadTime().textContent = `${data.readTime} menit baca`;
+    if (DOM.docPreviewTitle()) DOM.docPreviewTitle().textContent = file.name;
+    
+    DOM.dropZone().classList.add("hidden");
+    DOM.docPreviewBox().classList.remove("hidden");
+    DOM.docPreviewBox().scrollIntoView({ behavior: "smooth", block: "nearest" });
+    showToast(`Dokumen "${file.name}" siap diringkas.`);
+  } catch (err) {
+    showToast(err.message, "error");
+  } finally {
+    DOM.dropZone().querySelector("p").textContent = btnText;
+  }
+}
+
 // ─── SUMMARIZE ────────────────────────────────────────────────────────────────
 function initSummarize() {
   DOM.summarizeBtn()?.addEventListener("click", () => doSummarize(getInputText(), DOM.summarizeBtn()));
   DOM.summarizeBtnUrl()?.addEventListener("click", () => doSummarize((DOM.urlTextarea()?.value || "").trim(), DOM.summarizeBtnUrl()));
   DOM.summarizeBtnSearch()?.addEventListener("click", () => doSummarize((DOM.searchTextarea()?.value || "").trim(), DOM.summarizeBtnSearch()));
+  DOM.summarizeBtnDoc()?.addEventListener("click", () => doSummarize((DOM.docTextarea()?.value || "").trim(), DOM.summarizeBtnDoc()));
   DOM.newBtn()?.addEventListener("click", resetUI);
 }
 
@@ -394,9 +492,17 @@ async function doSummarize(text, triggerBtn) {
 
   setLoading(true, triggerBtn);
   showSkeletonResults();
+  
+  // Siapkan empty result object
+  state.lastResult = {
+    abstractive: null,
+    extractive: null,
+    keywords: [],
+    originalWordCount: 0
+  };
 
   try {
-    const res = await fetch("/api/summarize", {
+    const res = await fetch("/api/summarize-stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -406,17 +512,70 @@ async function doSummarize(text, triggerBtn) {
         method: state.method,
       }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Gagal memproses ringkasan.");
+    
+    if (!res.ok) {
+      const errData = await res.json();
+      throw new Error(errData.error || "Gagal memproses ringkasan.");
+    }
 
-    state.lastResult = data;
-    renderResults(data, state.method);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let absTextElement = DOM.absText();
+    if (absTextElement) {
+        absTextElement.innerHTML = '<span class="typing-cursor"></span>';
+        absTextElement.classList.remove("fade-in");
+    }
+    
     DOM.resultsSection()?.scrollIntoView({ behavior: "smooth", block: "start" });
-    showToast("Ringkasan berhasil dibuat!");
 
-    // Keep scan animation visible briefly after results render, so it
-    // doesn't feel like it cuts off abruptly the instant data arrives.
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      
+      const chunkStr = decoder.decode(value, { stream: true });
+      const events = chunkStr.split("\n\n");
+      
+      for (const event of events) {
+        if (!event.trim()) continue;
+        if (event.startsWith("data: ")) {
+          const dataStr = event.substring(6);
+          try {
+            const data = JSON.parse(dataStr);
+            
+            if (data.type === "init") {
+              state.lastResult.keywords = data.keywords;
+              state.lastResult.originalWordCount = data.originalWordCount;
+              if (data.extractive) {
+                state.lastResult.extractive = data.extractive;
+                renderResults(state.lastResult, state.method, true);
+              } else {
+                renderResults(state.lastResult, state.method, false);
+              }
+            } 
+            else if (data.type === "chunk") {
+               if (!state.lastResult.abstractive) state.lastResult.abstractive = { text: "" };
+               state.lastResult.abstractive.text += data.text;
+               if (absTextElement) {
+                   absTextElement.innerHTML = state.lastResult.abstractive.text + '<span class="typing-cursor"></span>';
+               }
+            } 
+            else if (data.type === "done") {
+               if (data.abstractive) {
+                 state.lastResult.abstractive = data.abstractive;
+               }
+               // Remove cursor
+               if (absTextElement) absTextElement.innerHTML = state.lastResult.abstractive?.text || "";
+               // Final render to update metrics
+               renderResults(state.lastResult, state.method, false);
+               showToast("Ringkasan selesai!");
+            }
+          } catch (e) {
+            console.error("Parse error chunk:", e, dataStr);
+          }
+        }
+      }
+    }
+
   } catch (err) {
     showToast(err.message, "error");
     hideSkeletonResults();
@@ -614,7 +773,7 @@ function renderComparisonTable(absMetrics, extMetrics) {
     </table>`;
 }
 
-// ─── COPY / EXPORT ────────────────────────────────────────────────────────────
+// ─── COPY / EXPORT / TTS ──────────────────────────────────────────────────────
 function initCopyExport() {
   DOM.copyAbsBtn()?.addEventListener("click", () => {
     const text = DOM.absText()?.textContent?.trim();
@@ -629,7 +788,58 @@ function initCopyExport() {
     navigator.clipboard.writeText(text).then(() => showToast("Ringkasan ekstraktif disalin!"));
   });
 
-  DOM.exportBtn()?.addEventListener("click", exportTxt);
+  DOM.exportTxtBtn()?.addEventListener("click", exportTxt);
+  DOM.exportPdfBtn()?.addEventListener("click", exportPdf);
+
+  // TTS Listeners
+  DOM.ttsAbsBtn()?.addEventListener("click", () => {
+    const text = DOM.absText()?.textContent?.trim();
+    if (text) speakText(text);
+  });
+  
+  DOM.ttsExtBtn()?.addEventListener("click", () => {
+    const items = DOM.extList()?.querySelectorAll(".sentence-item p");
+    if (!items?.length) return;
+    const text = [...items].map((el) => el.textContent.trim()).join(". ");
+    speakText(text);
+  });
+}
+
+let currentUtterance = null;
+function speakText(text) {
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel(); // Stop if already speaking
+    currentUtterance = new SpeechSynthesisUtterance(text);
+    currentUtterance.lang = 'id-ID';
+    currentUtterance.rate = 0.9;
+    window.speechSynthesis.speak(currentUtterance);
+    showToast("Membacakan ringkasan...", "success");
+  } else {
+    showToast("Browser Anda tidak mendukung Text-to-Speech.", "error");
+  }
+}
+
+function exportPdf() {
+  const section = DOM.resultsSection();
+  if (!section || !state.lastResult) return;
+  
+  // Sembunyikan tombol-tombol yang tidak perlu ada di PDF
+  const hideEls = section.querySelectorAll("button");
+  hideEls.forEach(el => el.style.display = 'none');
+  
+  const opt = {
+    margin:       [0.5, 0.5, 0.5, 0.5],
+    filename:     `RingkasKilat_${Date.now()}.pdf`,
+    image:        { type: 'jpeg', quality: 0.98 },
+    html2canvas:  { scale: 2, useCORS: true },
+    jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+  };
+  
+  showToast("Menyiapkan PDF...", "success");
+  html2pdf().set(opt).from(section).save().then(() => {
+    hideEls.forEach(el => el.style.display = '');
+    showToast("PDF berhasil diunduh!", "success");
+  });
 }
 
 function exportTxt() {
@@ -745,6 +955,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initMethodSelector();
   initUrlFetch();
   initNewsSearch();
+  initDocUpload();
   initSummarize();
   initCopyExport();
   renderBaselineStats();
