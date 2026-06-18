@@ -13,6 +13,7 @@ __pycache__/
 .venv
 train/
 best_mt5_model/
+.env
 
 # Jupyter
 .ipynb_checkpoints/

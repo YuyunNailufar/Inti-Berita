@@ -36,22 +36,32 @@ const DOM = {
   readTimeEl:    () => $("read-time"),
 
   // URL panel
-  urlInput:      () => $("url-input"),
-  urlFetchBtn:   () => $("url-fetch-btn"),
-  urlStatus:     () => $("url-status"),
+  urlInput:        () => $("url-input"),
+  urlFetchBtn:     () => $("url-fetch-btn"),
+  urlStatus:       () => $("url-status"),
+  urlPreviewBox:   () => $("url-preview-box"),
+  urlTextarea:     () => $("url-textarea"),
+  urlWordCount:    () => $("url-word-count"),
+  urlReadTime:     () => $("url-read-time"),
+  summarizeBtnUrl: () => $("summarize-btn-url"),
 
   // Search panel
-  searchInput:   () => $("search-input"),
-  searchBtn:     () => $("search-btn"),
-  searchResults: () => $("search-results"),
+  searchInput:       () => $("search-input"),
+  searchBtn:         () => $("search-btn"),
+  searchResults:     () => $("search-results"),
+  searchPreviewBox:  () => $("search-preview-box"),
+  searchTextarea:    () => $("search-textarea"),
+  searchWordCount:   () => $("search-word-count"),
+  searchReadTime:    () => $("search-read-time"),
+  searchPreviewTitle:() => $("search-preview-title"),
+  summarizeBtnSearch:() => $("summarize-btn-search"),
 
   // Config
+  configPanel:   () => $("config-panel"),
   slider:        () => $("length-slider"),
   sliderLabel:   () => $("slider-label"),
   toggleKw:      () => $("toggle-keywords"),
-  methodBothBtn: () => $("method-both"),
-  methodAbsBtn:  () => $("method-abs"),
-  methodExtBtn:  () => $("method-ext"),
+  methodOptions: () => document.querySelectorAll(".method-option"),
 
   // Action
   summarizeBtn:  () => $("summarize-btn"),
@@ -93,13 +103,15 @@ function showToast(msg, type = "success") {
   setTimeout(() => el.remove(), 3000);
 }
 
-function setLoading(on) {
+function setLoading(on, triggerBtn) {
   state.isLoading = on;
-  const btn = DOM.summarizeBtn();
-  if (!btn) return;
+  const allBtns = [DOM.summarizeBtn(), DOM.summarizeBtnUrl(), DOM.summarizeBtnSearch()].filter(Boolean);
+  const activeBtn = triggerBtn || DOM.summarizeBtn();
+  if (!activeBtn) return;
+
   if (on) {
-    btn.disabled = true;
-    btn.innerHTML = `
+    allBtns.forEach((b) => { b.disabled = true; });
+    activeBtn.innerHTML = `
       <svg class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
@@ -107,8 +119,10 @@ function setLoading(on) {
       Memproses…`;
     DOM.scanLine()?.classList.add("active");
   } else {
-    btn.disabled = false;
-    btn.innerHTML = `<span class="material-symbols-outlined">auto_awesome</span>Ringkas Sekarang`;
+    allBtns.forEach((b) => {
+      b.disabled = false;
+      b.innerHTML = `<span class="material-symbols-outlined">auto_awesome</span>Ringkas Sekarang`;
+    });
     DOM.scanLine()?.classList.remove("active");
   }
 }
@@ -163,36 +177,23 @@ function debounce(fn, ms) {
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }
 
-// ─── METHOD RADIO ─────────────────────────────────────────────────────────────
-function initMethodRadio() {
-  const radios = document.querySelectorAll('input[name="method"]');
-  const labels = {
-    both:        DOM.methodBothBtn,
-    abstractive: DOM.methodAbsBtn,
-    extractive:  DOM.methodExtBtn,
-  };
+// ─── METHOD SELECTOR ──────────────────────────────────────────────────────────
+function initMethodSelector() {
+  const options = DOM.methodOptions();
+  if (!options.length) return;
 
-  function updateHighlight(selectedValue) {
-    Object.entries(labels).forEach(([value, getLabel]) => {
-      const label = getLabel();
-      if (!label) return;
-      if (value === selectedValue) {
-        label.classList.add("border-primary", "bg-primary/5");
-        label.classList.remove("border-outline-variant/30");
-      } else {
-        label.classList.remove("border-primary", "bg-primary/5");
-        label.classList.add("border-outline-variant/30");
-      }
-    });
-  }
+  options.forEach((opt) => {
+    opt.addEventListener("click", () => {
+      const radio = opt.querySelector('input[type="radio"]');
+      if (radio) radio.checked = true;
+      state.method = opt.dataset.method;
 
-  // Set initial state (both is checked by default)
-  updateHighlight("both");
-
-  radios.forEach((radio) => {
-    radio.addEventListener("change", () => {
-      state.method = radio.value;
-      updateHighlight(radio.value);
+      options.forEach((o) => {
+        const active = o === opt;
+        o.classList.toggle("border-primary", active);
+        o.classList.toggle("bg-primary/5", active);
+        o.classList.toggle("border-outline-variant/30", !active);
+      });
     });
   });
 }
@@ -244,21 +245,12 @@ async function fetchUrl() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Gagal mengambil URL.");
 
-    // Isi url-textarea dan tampilkan preview box
-    const urlTextarea = $("url-textarea");
-    if (urlTextarea) {
-      urlTextarea.value = data.text;
-      urlTextarea.removeAttribute("readonly");
-    }
-    $("url-preview-box")?.classList.remove("hidden");
-    const urlWordCount = $("url-word-count");
-    const urlReadTime  = $("url-read-time");
-    if (urlWordCount) urlWordCount.textContent = `${data.wordCount} kata`;
-    if (urlReadTime)  urlReadTime.textContent  = `${data.readTime} menit baca`;
+    // Fill this panel's own preview box (NOT the main textarea)
+    DOM.urlTextarea().value = data.text;
+    DOM.urlWordCount().textContent = `${data.wordCount} kata`;
+    DOM.urlReadTime().textContent = `${data.readTime} menit baca`;
+    DOM.urlPreviewBox()?.classList.remove("hidden");
 
-    // Juga isi main textarea untuk fallback summarize
-    DOM.textarea().value = data.text;
-    updateWordCount();
     if (status) {
       status.textContent = `✓ Berhasil — ${data.wordCount} kata diambil`;
       status.className = "text-secondary text-label-sm font-medium";
@@ -329,7 +321,7 @@ function renderNewsResults(articles) {
     return;
   }
   container.innerHTML = articles.map((a) => `
-    <div class="news-card" data-url="${a.url}">
+    <div class="news-card" data-url="${a.url}" data-title="${(a.title || "").replace(/"/g, '&quot;')}">
       <p class="font-label-md text-label-md text-on-surface line-clamp-2 mb-1">${a.title}</p>
       <p class="text-xs text-on-surface-variant line-clamp-2 mb-2">${a.description || ""}</p>
       <div class="flex items-center justify-between">
@@ -340,16 +332,40 @@ function renderNewsResults(articles) {
       </div>
     </div>`).join("");
 
-  // Attach click handlers
+  // Attach click handlers — scrape & show inline in this same panel
   container.querySelectorAll(".use-news-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async () => {
       const card = btn.closest("[data-url]");
       const url = card?.dataset.url;
-      if (url) {
-        DOM.urlInput().value = url;
-        // Switch to URL tab
-        document.querySelector('[data-tab="url"]')?.click();
-        fetchUrl();
+      const title = card?.dataset.title || "";
+      if (!url) return;
+
+      const originalLabel = btn.innerHTML;
+      btn.innerHTML = `<span class="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>Memuat…`;
+      btn.disabled = true;
+
+      try {
+        const res = await fetch("/api/scrape", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Gagal mengambil artikel.");
+
+        DOM.searchTextarea().value = data.text;
+        DOM.searchWordCount().textContent = `${data.wordCount} kata`;
+        DOM.searchReadTime().textContent = `${data.readTime} menit baca`;
+        if (DOM.searchPreviewTitle()) DOM.searchPreviewTitle().textContent = title;
+        DOM.searchPreviewBox()?.classList.remove("hidden");
+        DOM.searchPreviewBox()?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+        showToast(`Artikel "${title.slice(0, 40)}…" siap diringkas.`);
+      } catch (err) {
+        showToast(err.message, "error");
+      } finally {
+        btn.innerHTML = originalLabel;
+        btn.disabled = false;
       }
     });
   });
@@ -363,28 +379,20 @@ function formatDate(iso) {
 
 // ─── SUMMARIZE ────────────────────────────────────────────────────────────────
 function initSummarize() {
-  DOM.summarizeBtn()?.addEventListener("click", doSummarize);
-  // Tombol "Ringkas Sekarang" di panel URL
-  $("summarize-btn-url")?.addEventListener("click", () => {
-    const urlText = $("url-textarea")?.value?.trim();
-    if (urlText) {
-      DOM.textarea().value = urlText;
-      updateWordCount();
-    }
-    doSummarize();
-  });
+  DOM.summarizeBtn()?.addEventListener("click", () => doSummarize(getInputText(), DOM.summarizeBtn()));
+  DOM.summarizeBtnUrl()?.addEventListener("click", () => doSummarize((DOM.urlTextarea()?.value || "").trim(), DOM.summarizeBtnUrl()));
+  DOM.summarizeBtnSearch()?.addEventListener("click", () => doSummarize((DOM.searchTextarea()?.value || "").trim(), DOM.summarizeBtnSearch()));
   DOM.newBtn()?.addEventListener("click", resetUI);
 }
 
-async function doSummarize() {
-  const text = getInputText();
+async function doSummarize(text, triggerBtn) {
   if (!text || text.length < 50) {
     showToast("Teks terlalu pendek (min. 50 karakter).", "error");
     return;
   }
   if (state.isLoading) return;
 
-  setLoading(true);
+  setLoading(true, triggerBtn);
   showSkeletonResults();
 
   try {
@@ -402,15 +410,18 @@ async function doSummarize() {
     if (!res.ok) throw new Error(data.error || "Gagal memproses ringkasan.");
 
     state.lastResult = data;
-    renderResults(data);
-
+    renderResults(data, state.method);
     DOM.resultsSection()?.scrollIntoView({ behavior: "smooth", block: "start" });
     showToast("Ringkasan berhasil dibuat!");
+
+    // Keep scan animation visible briefly after results render, so it
+    // doesn't feel like it cuts off abruptly the instant data arrives.
+    await new Promise((resolve) => setTimeout(resolve, 600));
   } catch (err) {
     showToast(err.message, "error");
     hideSkeletonResults();
   } finally {
-    setLoading(false);
+    setLoading(false, triggerBtn);
   }
 }
 
@@ -448,7 +459,7 @@ function hideSkeletonResults() {
 }
 
 // ─── RENDER RESULTS ───────────────────────────────────────────────────────────
-function renderResults(data) {
+function renderResults(data, method = "both") {
   const { abstractive, extractive, keywords } = data;
   const m = state.method;
 
@@ -494,7 +505,37 @@ function renderResults(data) {
     compTableWrapper?.classList.add("hidden");
   }
 
+  // ── Filter cards based on selected method
+  applyMethodFilter(method);
+
   DOM.resultsSection()?.classList.remove("hidden");
+}
+
+function applyMethodFilter(method) {
+  const absCard = DOM.absCard();
+  const extCard = DOM.extCard();
+  const cardsGrid = absCard?.parentElement; // grid wrapper of both cards
+  const compTableWrapper = DOM.compTable()?.closest(".bg-white");
+
+  if (method === "abstractive") {
+    absCard?.classList.remove("hidden");
+    extCard?.classList.add("hidden");
+    cardsGrid?.classList.remove("md:grid-cols-2");
+    cardsGrid?.classList.add("md:grid-cols-1", "max-w-2xl", "mx-auto");
+    compTableWrapper?.classList.add("hidden");
+  } else if (method === "extractive") {
+    absCard?.classList.add("hidden");
+    extCard?.classList.remove("hidden");
+    cardsGrid?.classList.remove("md:grid-cols-2");
+    cardsGrid?.classList.add("md:grid-cols-1", "max-w-2xl", "mx-auto");
+    compTableWrapper?.classList.add("hidden");
+  } else {
+    absCard?.classList.remove("hidden");
+    extCard?.classList.remove("hidden");
+    cardsGrid?.classList.remove("md:grid-cols-1", "max-w-2xl", "mx-auto");
+    cardsGrid?.classList.add("md:grid-cols-2");
+    compTableWrapper?.classList.remove("hidden");
+  }
 }
 
 function renderMetricBadges(container, metrics, type) {
@@ -701,7 +742,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initTextarea();
   initSlider();
   initToggle();
-  initMethodRadio();
+  initMethodSelector();
   initUrlFetch();
   initNewsSearch();
   initSummarize();
