@@ -14,6 +14,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
   <!-- Styles -->
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <!-- html2pdf -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 
 <body class="bg-surface text-on-surface overflow-x-hidden selection:bg-primary-fixed selection:text-on-primary-fixed">
@@ -98,6 +100,9 @@
               <button class="tab-btn px-5 py-2 rounded-md text-label-md text-on-surface-variant hover:text-on-surface transition-all" data-tab="url">
                 <span class="material-symbols-outlined text-[16px] align-middle mr-1">link</span>URL Berita
               </button>
+              <button class="tab-btn px-5 py-2 rounded-md text-label-md text-on-surface-variant hover:text-on-surface transition-all" data-tab="doc">
+                <span class="material-symbols-outlined text-[16px] align-middle mr-1">upload_file</span>Dokumen
+              </button>
               <button class="tab-btn px-5 py-2 rounded-md text-label-md text-on-surface-variant hover:text-on-surface transition-all" data-tab="search">
                 <span class="material-symbols-outlined text-[16px] align-middle mr-1">search</span>Cari Topik
               </button>
@@ -179,6 +184,48 @@
                   <span class="text-[10px] px-2 py-0.5 bg-surface-container rounded-full text-on-surface-variant">Tempo</span>
                   <span class="text-[10px] px-2 py-0.5 bg-surface-container rounded-full text-on-surface-variant">CNN Indonesia</span>
                   <span class="text-[10px] px-2 py-0.5 bg-surface-container rounded-full text-on-surface-variant">& lainnya</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── Panel: Upload Dokumen -->
+            <div id="panel-doc" class="hidden px-4 pb-4">
+              <div class="space-y-3">
+                <p class="text-label-md text-on-surface-variant">Unggah dokumen (.pdf, .docx) untuk diringkas otomatis.</p>
+                <div id="drop-zone" class="border-2 border-dashed border-outline-variant/40 rounded-xl p-8 text-center hover:border-primary transition-all cursor-pointer bg-surface-container-low">
+                  <span class="material-symbols-outlined text-[48px] text-on-surface-variant/50 mb-2">cloud_upload</span>
+                  <p class="text-label-md text-on-surface">Tarik & Lepas dokumen di sini</p>
+                  <p class="text-[12px] text-on-surface-variant/60 mt-1">atau klik untuk memilih file (Max 5MB)</p>
+                  <input type="file" id="file-input" class="hidden" accept=".pdf,.docx">
+                </div>
+                
+                <!-- Preview teks hasil upload -->
+                <div id="doc-preview-box" class="hidden space-y-2">
+                  <div class="flex items-center justify-between">
+                    <span class="text-label-sm text-on-surface-variant flex items-center gap-1">
+                      <span class="material-symbols-outlined text-[15px]">description</span>
+                      <span id="doc-word-count">0 kata</span> · <span id="doc-read-time">1 menit baca</span>
+                    </span>
+                    <span id="doc-preview-title" class="text-label-sm text-primary font-semibold truncate max-w-[50%]"></span>
+                  </div>
+                  <textarea
+                    id="doc-textarea"
+                    class="w-full h-52 p-4 text-body-md bg-surface-container-low border border-outline-variant/30 rounded-xl focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none custom-scrollbar transition-all"
+                    placeholder="Teks dokumen akan muncul di sini setelah diunggah…"
+                    readonly></textarea>
+                  <div class="flex justify-end gap-2">
+                    <button
+                      id="reset-doc-btn"
+                      class="text-on-surface-variant px-4 py-3 rounded-xl text-label-md hover:bg-surface-container transition-all active:scale-95">
+                      Ganti File
+                    </button>
+                    <button
+                      id="summarize-btn-doc"
+                      class="bg-primary text-on-primary px-7 py-3 rounded-xl text-label-md flex items-center gap-2 hover:shadow-lg hover:-translate-y-0.5 transition-all active:scale-95">
+                      <span class="material-symbols-outlined">auto_awesome</span>
+                      Ringkas Sekarang
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -300,8 +347,11 @@
         <div class="flex items-center justify-between flex-wrap gap-sm">
           <h3 class="text-headline-lg">Hasil Ringkasan</h3>
           <div class="flex gap-xs">
-            <button id="export-btn" class="flex items-center gap-1 px-4 py-2 rounded-lg border border-outline-variant/40 hover:bg-surface-container text-label-md text-on-surface-variant transition-colors">
-              <span class="material-symbols-outlined text-[18px]">download</span>Ekspor .txt
+            <button id="export-txt-btn" class="flex items-center gap-1 px-4 py-2 rounded-lg border border-outline-variant/40 hover:bg-surface-container text-label-md text-on-surface-variant transition-colors">
+              <span class="material-symbols-outlined text-[18px]">description</span>.TXT
+            </button>
+            <button id="export-pdf-btn" class="flex items-center gap-1 px-4 py-2 rounded-lg bg-secondary text-on-primary hover:shadow-md hover:-translate-y-0.5 text-label-md transition-all">
+              <span class="material-symbols-outlined text-[18px]">picture_as_pdf</span>.PDF
             </button>
           </div>
         </div>
@@ -330,9 +380,14 @@
                 <span class="bg-primary/10 text-primary px-3 py-1 rounded-full text-label-sm font-bold">Abstraktif · mT5-small</span>
                 <p class="text-[11px] text-on-surface-variant/60 italic mt-1">Kalimat baru hasil generasi model</p>
               </div>
-              <button id="copy-abs" class="p-1.5 hover:bg-surface-container rounded-lg transition-colors" title="Salin ringkasan">
-                <span class="material-symbols-outlined text-on-surface-variant text-[18px]">content_copy</span>
-              </button>
+              <div class="flex items-center">
+                <button id="tts-abs" class="p-1.5 hover:bg-surface-container rounded-lg transition-colors text-on-surface-variant" title="Bacakan ringkasan">
+                  <span class="material-symbols-outlined text-[18px]">volume_up</span>
+                </button>
+                <button id="copy-abs" class="p-1.5 hover:bg-surface-container rounded-lg transition-colors" title="Salin ringkasan">
+                  <span class="material-symbols-outlined text-on-surface-variant text-[18px]">content_copy</span>
+                </button>
+              </div>
             </div>
 
             <!-- Metric badges -->
@@ -363,9 +418,14 @@
                 <span class="bg-surface-container-highest text-on-surface-variant px-3 py-1 rounded-full text-label-sm font-bold">Ekstraktif · TextRank</span>
                 <p class="text-[11px] text-on-surface-variant/60 italic mt-1">Kalimat inti terpilih dari teks asli</p>
               </div>
-              <button id="copy-ext" class="p-1.5 hover:bg-surface-container rounded-lg transition-colors" title="Salin ringkasan">
-                <span class="material-symbols-outlined text-on-surface-variant text-[18px]">content_copy</span>
-              </button>
+              <div class="flex items-center">
+                <button id="tts-ext" class="p-1.5 hover:bg-surface-container rounded-lg transition-colors text-on-surface-variant" title="Bacakan ringkasan">
+                  <span class="material-symbols-outlined text-[18px]">volume_up</span>
+                </button>
+                <button id="copy-ext" class="p-1.5 hover:bg-surface-container rounded-lg transition-colors" title="Salin ringkasan">
+                  <span class="material-symbols-outlined text-on-surface-variant text-[18px]">content_copy</span>
+                </button>
+              </div>
             </div>
 
             <!-- Metric badges -->
