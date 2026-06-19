@@ -1,4 +1,4 @@
-# RingkasKilat (Inti Berita)
+# Inti Berita
 
 RingkasKilat adalah aplikasi web berbasis *Machine Learning* yang dirancang untuk meringkas teks bahasa Indonesia secara otomatis. Aplikasi ini dibangun dengan framework Flask di sisi backend dan menggunakan model **mT5** (Multilingual T5) untuk memproses teks secara cerdas, memberikan hasil ringkasan yang padat dan akurat.
 
