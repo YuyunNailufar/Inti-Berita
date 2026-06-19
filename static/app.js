@@ -1,5 +1,5 @@
 /**
- * app.js — RingkasKilat Frontend Logic
+ * app.js — IntiBerita Frontend Logic
  * Handles: tab switching, input modes, summarize API, scrape API,
  *          news search API, result rendering, metrics bars, toast, copy, export.
  */
@@ -95,6 +95,22 @@ const DOM = {
   keywordSection: () => $("keyword-section"),
   compTable:      () => $("comparison-table"),
   newBtn:         () => $("new-btn"),
+
+  // Single-method evaluation layout (inner 2-col grid per card)
+  absInnerGrid:        () => $("abs-inner-grid"),
+  extInnerGrid:        () => $("ext-inner-grid"),
+  absFooterStats:      () => $("abs-footer-stats"),
+  extFooterStats:      () => $("ext-footer-stats"),
+  absEvalPanel:        () => $("abs-eval-panel"),
+  extEvalPanel:        () => $("ext-eval-panel"),
+  absEvalRouge:        () => $("abs-eval-rouge"),
+  extEvalRouge:        () => $("ext-eval-rouge"),
+  absEvalWordcount:    () => $("abs-eval-wordcount"),
+  extEvalWordcount:    () => $("ext-eval-wordcount"),
+  absEvalCompression:  () => $("abs-eval-compression"),
+  extEvalCompression:  () => $("ext-eval-compression"),
+  absEvalBaseline:     () => $("abs-eval-baseline"),
+  extEvalBaseline:     () => $("ext-eval-baseline"),
 
   // Copy / Export / TTS
   copyAbsBtn:    () => $("copy-abs"),
@@ -633,6 +649,7 @@ function renderResults(data, method = "both") {
     renderMetricBadges(DOM.absBadges(), abstractive.metrics, "abs");
     if (DOM.absWordCount())   DOM.absWordCount().textContent   = `${abstractive.wordCount} kata`;
     if (DOM.absCompression()) DOM.absCompression().textContent = `−${abstractive.compression}%`;
+    renderEvalPanel("abs", abstractive);
   }
 
   // ── Extractive sentences list (hanya kalau ada di response)
@@ -645,6 +662,7 @@ function renderResults(data, method = "both") {
     renderMetricBadges(DOM.extBadges(), extractive.metrics, "ext");
     if (DOM.extWordCount())   DOM.extWordCount().textContent   = `${extractive.wordCount} kata`;
     if (DOM.extCompression()) DOM.extCompression().textContent = `−${extractive.compression}%`;
+    renderEvalPanel("ext", extractive);
   }
 
   // ── Keywords
@@ -655,46 +673,111 @@ function renderResults(data, method = "both") {
     ).join("");
   }
 
-  // ── Comparison table — hanya tampil kalau keduanya ada
-  const compTableWrapper = DOM.compTable()?.closest(".bg-white.rounded-xl.border");
+  // ── Comparison table — hanya tampil kalau keduanya ada DAN mode 'both'
   if (m === "both" && abstractive && extractive) {
     renderComparisonTable(abstractive.metrics, extractive.metrics);
-    compTableWrapper?.classList.remove("hidden");
-  } else {
-    compTableWrapper?.classList.add("hidden");
   }
 
-  // ── Filter cards based on selected method
+  // ── Filter cards & inner layout based on selected method
   applyMethodFilter(method);
 
   DOM.resultsSection()?.classList.remove("hidden");
+}
+
+/**
+ * Fills the full evaluation panel (right column) shown only in single-method mode.
+ * prefix: "abs" | "ext"
+ */
+function renderEvalPanel(prefix, result) {
+  const isAbs = prefix === "abs";
+  const rougeContainer  = isAbs ? DOM.absEvalRouge()       : DOM.extEvalRouge();
+  const wordcountEl     = isAbs ? DOM.absEvalWordcount()   : DOM.extEvalWordcount();
+  const compressionEl   = isAbs ? DOM.absEvalCompression() : DOM.extEvalCompression();
+  const baselineEl      = isAbs ? DOM.absEvalBaseline()    : DOM.extEvalBaseline();
+  const baseline        = isAbs ? BASELINE.mt5 : BASELINE.textrank;
+  const metrics         = result.metrics;
+  if (!rougeContainer || !metrics) return;
+
+  // ROUGE mini-cards
+  const rougeRows = [
+    { label: "R-1", key: "rouge1", value: metrics.rouge1 },
+    { label: "R-2", key: "rouge2", value: metrics.rouge2 },
+    { label: "R-L", key: "rougeL", value: metrics.rougeL },
+  ];
+  rougeContainer.innerHTML = rougeRows.map((r) => `
+    <div class="flex flex-col items-center bg-white rounded-lg py-2 border border-outline-variant/20">
+      <span class="text-[10px] font-bold text-secondary">${r.label}</span>
+      <span class="text-[15px] font-bold text-on-surface">${r.value?.toFixed(3) ?? "—"}</span>
+    </div>`).join("");
+
+  // Word count & compression
+  if (wordcountEl)   wordcountEl.textContent   = `${result.wordCount} kata`;
+  if (compressionEl) compressionEl.textContent = `−${result.compression}%`;
+
+  // Baseline comparison rows
+  if (baselineEl) {
+    baselineEl.innerHTML = rougeRows.map((r) => {
+      const diff = r.value - baseline[r.key];
+      const diffStr = diff >= 0 ? `+${diff.toFixed(3)}` : diff.toFixed(3);
+      const diffColor = diff >= 0 ? "text-secondary" : "text-error";
+      return `
+        <div class="flex justify-between items-center text-[11px]">
+          <span class="text-on-surface-variant">${r.label} (base: ${baseline[r.key]})</span>
+          <span class="font-bold ${diffColor}">${diffStr}</span>
+        </div>`;
+    }).join("");
+  }
 }
 
 function applyMethodFilter(method) {
   const absCard = DOM.absCard();
   const extCard = DOM.extCard();
   const cardsGrid = absCard?.parentElement; // grid wrapper of both cards
-  const compTableWrapper = DOM.compTable()?.closest(".bg-white");
+  const compTableWrapper = DOM.compTable()?.closest(".bg-white.rounded-xl.border");
+
+  const single = method === "abstractive" || method === "extractive";
 
   if (method === "abstractive") {
     absCard?.classList.remove("hidden");
     extCard?.classList.add("hidden");
-    cardsGrid?.classList.remove("md:grid-cols-2");
-    cardsGrid?.classList.add("md:grid-cols-1", "max-w-2xl", "mx-auto");
-    compTableWrapper?.classList.add("hidden");
   } else if (method === "extractive") {
     absCard?.classList.add("hidden");
     extCard?.classList.remove("hidden");
-    cardsGrid?.classList.remove("md:grid-cols-2");
-    cardsGrid?.classList.add("md:grid-cols-1", "max-w-2xl", "mx-auto");
-    compTableWrapper?.classList.add("hidden");
   } else {
     absCard?.classList.remove("hidden");
     extCard?.classList.remove("hidden");
-    cardsGrid?.classList.remove("md:grid-cols-1", "max-w-2xl", "mx-auto");
+  }
+
+  if (single) {
+    cardsGrid?.classList.remove("md:grid-cols-2");
+    cardsGrid?.classList.add("md:grid-cols-1");
+    compTableWrapper?.classList.add("hidden");
+  } else {
+    cardsGrid?.classList.remove("md:grid-cols-1");
     cardsGrid?.classList.add("md:grid-cols-2");
     compTableWrapper?.classList.remove("hidden");
   }
+
+  // ── Inner layout per card: compact (badges + footer) vs full eval panel (2-col grid)
+  [
+    { inner: DOM.absInnerGrid(), badges: DOM.absBadges(), footer: DOM.absFooterStats(), evalPanel: DOM.absEvalPanel() },
+    { inner: DOM.extInnerGrid(), badges: DOM.extBadges(), footer: DOM.extFooterStats(), evalPanel: DOM.extEvalPanel() },
+  ].forEach(({ inner, badges, footer, evalPanel }) => {
+    if (!inner) return;
+    if (single) {
+      inner.classList.remove("grid-cols-1");
+      inner.classList.add("md:grid-cols-[1fr_260px]");
+      badges?.classList.add("hidden");
+      footer?.classList.add("hidden");
+      evalPanel?.classList.remove("hidden");
+    } else {
+      inner.classList.add("grid-cols-1");
+      inner.classList.remove("md:grid-cols-[1fr_260px]");
+      badges?.classList.remove("hidden");
+      footer?.classList.remove("hidden");
+      evalPanel?.classList.add("hidden");
+    }
+  });
 }
 
 function renderMetricBadges(container, metrics, type) {

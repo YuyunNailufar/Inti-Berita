@@ -24,7 +24,7 @@ app = Flask(__name__)
 # Pakai Path(__file__).resolve().parent agar path selalu relatif ke file ini,
 # bukan ke working directory saat server dijalankan.
 MODEL_DIR = str(Path(__file__).resolve().parent / "best_mt5_model")
-NEWS_API_KEY = "440da492f3384e9b8f6aa5d8be8c8ae4"
+NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "")
 
 # Length presets
 LENGTH_PRESETS = {
@@ -239,7 +239,7 @@ def compute_metrics(hypothesis: str, reference: str) -> dict:
 
 # ─── Web Scraping ─────────────────────────────────────────────────────────────
 def scrape_url(url: str) -> str:
-    headers = {"User-Agent": "Mozilla/5.0 (compatible; RingkasKilat/1.0)"}
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; IntiBerita/1.0)"}
     resp = requests.get(url, headers=headers, timeout=10)
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "html.parser")
