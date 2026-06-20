@@ -6,7 +6,7 @@ Cocok digunakan untuk keperluan akademik, pekerjaan kantor, maupun sekadar memba
 
 ## Fitur Utama
 
-- **Fleksibilitas Input**: Anda bisa memasukkan teks dengan cara menyalin (paste), memasukkan URL artikel berita, atau mengunggah dokumen langsung (mendukung format `.pdf` dan `.docx`).
+- **Fleksibilitas Input**: Anda bisa memasukkan teks dengan cara menyalin (paste), memasukkan URL artikel berita, atau mengunggah dokumen langsung (mendukung format `.pdf` dan `.txt`).
 - **Streaming Output**: Hasil ringkasan dimunculkan secara bertahap (*real-time typing effect*), sehingga antarmuka terasa jauh lebih responsif.
 - **Mode Abstraktif & Ekstraktif**:
   - *Abstraktif*: Menulis ulang inti teks dengan kalimat baru yang natural.
