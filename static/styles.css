@@ -23,374 +23,6 @@ body {
 /* ── Slider ──────────────────────────────────────────────────────────────────*/
 input[type="range"] {
   -webkit-appearance: none;
-  width: 100%;
-  height: 6px;
-  background: #e9edff;
-  border-radius: 5px;
-  outline: none;
-  cursor: pointer;
-}
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 20px;
-  height: 20px;
-  background: #0058be;
-  cursor: pointer;
-  border-radius: 50%;
-  box-shadow: 0 4px 10px rgba(0, 88, 190, 0.3);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-input[type="range"]::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
-  box-shadow: 0 6px 16px rgba(0, 88, 190, 0.4);
-}
-input[type="range"]::-moz-range-thumb {
-  width: 20px;
-  height: 20px;
-  background: #0058be;
-  border: none;
-  cursor: pointer;
-  border-radius: 50%;
-}
-
-/* ── AI Input Container ──────────────────────────────────────────────────────*/
-.ai-input-container {
-  position: relative;
-  background: white;
-  border-radius: 0.75rem;
-  z-index: 1;
-  overflow: hidden;
-  border: 1px solid rgba(194, 198, 214, 0.4);
-}
-.ai-scan-line {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, #2170e4, transparent);
-  box-shadow: 0 0 15px 2px rgba(33, 112, 228, 0.4);
-  z-index: 2;
-  animation: scanMove 4s ease-in-out infinite;
-  pointer-events: none;
-  opacity: 0;
-}
-.ai-scan-line.active {
-  opacity: 0.6;
-}
-@keyframes scanMove {
-  0%   { top: 0%;   opacity: 0;   }
-  10%  { opacity: 0.6; }
-  90%  { opacity: 0.6; }
-  100% { top: 100%; opacity: 0;   }
-}
-
-/* ── Toggle Switch ───────────────────────────────────────────────────────────*/
-.toggle-switch {
-  position: relative;
-  width: 40px;
-  height: 22px;
-  background: #c2c6d6;
-  border-radius: 11px;
-  cursor: pointer;
-  transition: background 0.25s ease;
-  flex-shrink: 0;
-}
-.toggle-switch.on { background: #0058be; }
-.toggle-switch::after {
-  content: '';
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 16px;
-  height: 16px;
-  background: white;
-  border-radius: 50%;
-  transition: left 0.25s ease;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
-}
-.toggle-switch.on::after { left: 21px; }
-
-/* ── Metric Badge ────────────────────────────────────────────────────────────*/
-.metric-badge {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  background: rgba(0, 108, 73, 0.05);
-  border: 1px solid rgba(0, 108, 73, 0.2);
-  padding: 4px 8px;
-  border-radius: 6px;
-  min-width: 48px;
-}
-.metric-badge .label {
-  font-size: 9px;
-  font-weight: 700;
-  color: #006c49;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.metric-badge .value {
-  font-size: 13px;
-  font-weight: 700;
-  color: #141b2b;
-}
-
-/* ── Skeleton Loader ─────────────────────────────────────────────────────────*/
-@keyframes shimmer {
-  0%   { background-position: -600px 0; }
-  100% { background-position: 600px 0; }
-}
-.skeleton {
-  background: linear-gradient(90deg, #e9edff 25%, #f1f3ff 50%, #e9edff 75%);
-  background-size: 600px 100%;
-  animation: shimmer 1.5s infinite;
-  border-radius: 8px;
-}
-
-/* ── Result Cards ────────────────────────────────────────────────────────────*/
-.result-card {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.result-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 16px 40px rgba(17, 24, 39, 0.1);
-}
-
-/* ── Single-method Evaluation Panel (side column) ───────────────────────────*/
-#abs-eval-panel,
-#ext-eval-panel {
-  align-self: start;
-}
-@media (max-width: 767px) {
-  #abs-inner-grid.md\:grid-cols-\[1fr_260px\],
-  #ext-inner-grid.md\:grid-cols-\[1fr_260px\] {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ── Fade-in ─────────────────────────────────────────────────────────────────*/
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(16px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.fade-in { animation: fadeInUp 0.4s ease forwards; }
-
-/* ── Toast ───────────────────────────────────────────────────────────────────*/
-.toast {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  background: #141b2b;
-  color: white;
-  padding: 12px 20px;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 500;
-  z-index: 9999;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
-  animation: fadeInUp 0.3s ease;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.toast.success { border-left: 4px solid #006c49; }
-.toast.error   { border-left: 4px solid #ba1a1a; }
-
-/* ── News Card ───────────────────────────────────────────────────────────────*/
-.news-card {
-  border: 1px solid rgba(194, 198, 214, 0.4);
-  border-radius: 12px;
-  padding: 16px;
-  background: white;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-.news-card:hover {
-  border-color: #0058be;
-  background: rgba(0, 88, 190, 0.02);
-  transform: translateY(-1px);
-}
-
-/* ── ROUGE Bar ───────────────────────────────────────────────────────────────*/
-.rouge-bar-track {
-  background: #e9edff;
-  border-radius: 99px;
-  height: 6px;
-  overflow: hidden;
-}
-.rouge-bar-fill {
-  height: 100%;
-  border-radius: 99px;
-  transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* ── Extractive Highlight ────────────────────────────────────────────────────*/
-.sentence-item {
-  display: flex;
-  gap: 12px;
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(194, 198, 214, 0.3);
-}
-.sentence-item:last-child { border-bottom: none; }
-.sentence-number {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  background: rgba(0, 88, 190, 0.1);
-  color: #0058be;
-  border-radius: 50%;
-  font-size: 11px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* ── Responsive ──────────────────────────────────────────────────────────────*/
-@media (max-width: 768px) {
-  .hero-title { font-size: 28px; line-height: 36px; }
-}
-
-/* ── Comparison Table ────────────────────────────────────────────────────────*/
-.comparison-winner { background: rgba(0, 108, 73, 0.06); }
-.comparison-loser  { background: transparent; }
-
-/* ── Typing Cursor ───────────────────────────────────────────────────────────*/
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
-.typing-cursor::after {
-  content: '|';
-  display: inline-block;
-  margin-left: 2px;
-  animation: blink 1s step-end infinite;
-  color: #0058be;
-  font-weight: bold;
-}
-
-/* ── Print (Export PDF Native) ───────────────────────────────────────────────*/
-@media print {
-  @page {
-    margin: 20mm;
-    size: a4 portrait;
-  }
-
-  body {
-    background-color: #ffffff !important;
-    color: #000000 !important; /* Gunakan hitam pekat untuk teks agar tajam dicetak */
-  }
-
-  /* Menggunakan display: none secara agresif untuk semua elemen UI yang tidak perlu */
-  header, 
-  footer,
-  canvas, 
-  #hero, 
-  #evaluasi,
-  #tentang,
-  #demo > div:first-child, 
-  #config-panel, /* Panel Konfigurasi (Metode, Panjang Ringkasan) */
-  .toast, /* Pop-up notifikasi (misal: "Membuka menu Ekspor PDF...") */
-  #results-section > div.flex.items-center.justify-between, /* Header "Hasil Ringkasan" */
-  #results-section > div.bg-white, /* Tabel Perbandingan Metrik */
-  #results-section > div.flex.justify-center, /* Tombol Ringkas Teks Baru */
-  #keyword-section, /* Kata Kunci */
-  #abs-badges, #ext-badges, /* Skor ROUGE */
-  #abs-card > div:last-child, /* Footer kata/kompresi Abstraktif */
-  #ext-card > div:last-child, /* Footer kata/kompresi Ekstraktif */
-  .result-card p.italic, /* Deskripsi sub-judul kartu */
-  .baseline-stats, /* Statistik Baseline (jika ada) */
-  #results-section button, /* Semua tombol */
-  ::-webkit-scrollbar {
-    display: none !important;
-  }
-  
-  #results-section {
-    position: relative;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-    display: block !important;
-  }
-  
-  /* Buat judul laporan otomatis di paling atas dokumen PDF */
-  #results-section::before {
-    content: "Laporan Hasil Ringkasan Otomatis";
-    display: block;
-    font-size: 18pt;
-    font-weight: bold;
-    color: #000000;
-    margin-bottom: 24px;
-    border-bottom: 2px solid #000000;
-    padding-bottom: 12px;
-  }
-  
-  /* Ubah layout Grid 2 Kolom menjadi vertikal bersusun (Block) */
-  #results-section .grid {
-    display: block !important;
-  }
-  
-  /* HANGUSKAN semua hiasan kartu: jadikan teks polos biasa */
-  .result-card {
-    page-break-inside: avoid;
-    break-inside: avoid;
-    box-shadow: none !important;
-    border: none !important;
-    background-color: transparent !important;
-    padding: 0 !important;
-    margin-bottom: 32px !important;
-  }
-
-  /* Ubah desain badge judul kartu (Abstraktif/Ekstraktif) menjadi Header/Sub-judul biasa */
-  .result-card span.bg-primary\/10,
-  .result-card span.bg-surface-container-highest {
-    background: transparent !important;
-    color: #000000 !important;
-    font-size: 14pt !important;
-    font-weight: bold !important;
-    padding: 0 !important;
-    display: block;
-    margin-bottom: 12px !important;
-  }
-  
-  /* Tampilkan semua teks panjang tanpa scroll */
-  .custom-scrollbar, #abs-text, #ext-list {
-    overflow: visible !important;
-    height: auto !important;
-    max-height: none !important;
-  }
-
-  /* Rapikan font teks isinya */
-  #abs-text, #ext-list {
-    font-size: 11pt !important;
-    line-height: 1.6 !important;
-    text-align: justify !important;
-  }
-}/* ── Base ──────────────────────────────────────────────────────────────────── */
-body {
-  font-family: 'Inter', sans-serif;
-  background-color: #f9f9ff;
-  color: #141b2b;
-  scroll-behavior: smooth;
-}
-
-/* ── Material Symbols ────────────────────────────────────────────────────────*/
-.material-symbols-outlined {
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-}
-.material-symbols-outlined.fill {
-  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-}
-
-/* ── Scrollbar ───────────────────────────────────────────────────────────────*/
-.custom-scrollbar::-webkit-scrollbar { width: 6px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #dce2f7; border-radius: 10px; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #c2c6d6; }
-
-/* ── Slider ──────────────────────────────────────────────────────────────────*/
-input[type="range"] {
-  -webkit-appearance: none;
   appearance: none;
   width: 100%;
   height: 6px;
@@ -665,9 +297,8 @@ input[type="range"]::-moz-range-thumb {
   #results-section > div.bg-white, /* Tabel Perbandingan Metrik */
   #results-section > div.flex.justify-center, /* Tombol Ringkas Teks Baru */
   #keyword-section, /* Kata Kunci */
-  #abs-badges, #ext-badges, /* Skor ROUGE */
-  #abs-card > div:last-child, /* Footer kata/kompresi Abstraktif */
-  #ext-card > div:last-child, /* Footer kata/kompresi Ekstraktif */
+  #abs-badges, #ext-badges, /* Skor ROUGE (compact badge, mode 'both') */
+  #abs-footer-stats, #ext-footer-stats, /* Footer kata/kompresi (compact, mode 'both') */
   .result-card p.italic, /* Deskripsi sub-judul kartu */
   .baseline-stats, /* Statistik Baseline (jika ada) */
   #results-section button, /* Semua tombol */
@@ -735,5 +366,26 @@ input[type="range"]::-moz-range-thumb {
     font-size: 11pt !important;
     line-height: 1.6 !important;
     text-align: justify !important;
+  }
+
+  /* Panel evaluasi (mode single-method): tampilkan sebagai kotak inset
+     polos di bawah teks ringkasan, bukan kotak abu-abu bergaya UI */
+  #abs-eval-panel, #ext-eval-panel {
+    display: block !important;
+    background: transparent !important;
+    border: 1px solid #000000 !important;
+    border-radius: 0 !important;
+    padding: 12px !important;
+    margin-top: 12px !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  #abs-eval-panel h5, #ext-eval-panel h5 {
+    font-size: 12pt !important;
+    margin-bottom: 8px !important;
+  }
+  #abs-eval-panel .material-symbols-outlined,
+  #ext-eval-panel .material-symbols-outlined {
+    display: none !important; /* ikon tidak perlu di cetakan */
   }
 }

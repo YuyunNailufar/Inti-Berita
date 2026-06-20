@@ -902,19 +902,55 @@ function speakText(text) {
   }
 }
 
-function exportPdf() {
+async function exportPdf() {
   if (!state.lastResult) return;
-  
-  // Memanfaatkan fitur native "Print to PDF" dari browser.
-  // Jauh lebih bersih, teks bisa di-copy, file sangat kecil, dan anti-bug potong halaman.
-  // CSS khusus @media print sudah ditambahkan di styles.css untuk merapikan layoutnya.
-  
-  showToast("Membuka menu Ekspor PDF...", "success");
-  
-  // Berikan sedikit jeda agar animasi selesai sebelum print dialog terbuka
-  setTimeout(() => {
-    window.print();
-  }, 300);
+
+  // Generate PDF asli di server (reportlab) dan download langsung —
+  // TIDAK lewat dialog print browser sama sekali.
+  const btn = DOM.exportPdfBtn();
+  const originalHTML = btn ? btn.innerHTML : null;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>.PDF`;
+  }
+
+  try {
+    const { abstractive, extractive, keywords } = state.lastResult;
+    const res = await fetch("/api/export-pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        abstractive,
+        extractive,
+        keywords,
+        method: state.method,
+      }),
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || "Gagal membuat PDF.");
+    }
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "laporan_ringkasan.pdf";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    showToast("PDF berhasil diunduh!");
+  } catch (err) {
+    showToast(err.message, "error");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalHTML;
+    }
+  }
 }
 
 function exportTxt() {

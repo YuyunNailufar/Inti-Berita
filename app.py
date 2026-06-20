@@ -15,6 +15,12 @@ import io
 import PyPDF2
 from docx import Document
 from threading import Thread
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_JUSTIFY
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+from reportlab.lib import colors
 
 load_dotenv()  # baca file .env di folder yang sama dengan app.py
 
@@ -27,10 +33,13 @@ MODEL_DIR = str(Path(__file__).resolve().parent / "best_mt5_model")
 NEWS_API_KEY = os.environ.get("NEWS_API_KEY", "")
 
 # Length presets
+# max_new_tokens dibuat sedikit lebih besar dari kebutuhan ideal, supaya model
+# punya ruang menyelesaikan kalimat terakhir sebelum dipotong oleh token limit.
+# trim_to_complete_sentence() lalu memotong sisa kalimat yang tidak lengkap.
 LENGTH_PRESETS = {
-    1: {"max_new_tokens": 80,  "min_new_tokens": 30, "extractive_sentences": 2},
-    2: {"max_new_tokens": 160, "min_new_tokens": 60, "extractive_sentences": 3},
-    3: {"max_new_tokens": 256, "min_new_tokens": 100, "extractive_sentences": 5},
+    1: {"max_new_tokens": 110, "min_new_tokens": 30,  "extractive_sentences": 2},
+    2: {"max_new_tokens": 190, "min_new_tokens": 60,  "extractive_sentences": 3},
+    3: {"max_new_tokens": 280, "min_new_tokens": 100, "extractive_sentences": 5},
 }
 
 # ─── Model Loading ────────────────────────────────────────────────────────────
@@ -114,6 +123,20 @@ def textrank_summarize(text: str, num_sentences: int = 3) -> tuple[str, list[str
 
 
 # ─── mT5 (Abstractive) ───────────────────────────────────────────────────────
+def trim_to_complete_sentence(text: str) -> str:
+    """Potong teks supaya berakhir di kalimat lengkap terakhir (., !, ?).
+    Dipakai baik di jalur non-streaming maupun streaming agar konsisten.
+    Hanya memotong kalau memang ada kalimat lengkap di awal (last_end > 20);
+    kalau tidak ada sama sekali, biarkan teks apa adanya — lebih baik
+    daripada mengembalikan string kosong."""
+    text = text.strip()
+    if text and text[-1] not in '.!?':
+        last_end = max(text.rfind('.'), text.rfind('!'), text.rfind('?'))
+        if last_end > 20:
+            text = text[:last_end + 1]
+    return text
+
+
 def mt5_summarize(text: str, max_new_tokens: int = 120, min_new_tokens: int = 40) -> str:
     if model is None or tokenizer is None:
         return "[Model tidak tersedia. Pastikan folder best_mt5_model ada dan valid.]"
@@ -140,13 +163,7 @@ def mt5_summarize(text: str, max_new_tokens: int = 120, min_new_tokens: int = 40
         )
 
     summary = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    # Pastikan summary berakhir di kalimat yang lengkap
-    summary = summary.strip()
-    if summary and summary[-1] not in '.!?':
-        last_end = max(summary.rfind('.'), summary.rfind('!'), summary.rfind('?'))
-        if last_end > len(summary) // 2:  # ada titik di separuh akhir
-            summary = summary[:last_end + 1]
-    return summary
+    return trim_to_complete_sentence(summary)
 
 def mt5_summarize_stream(text: str, max_new_tokens: int = 120, min_new_tokens: int = 40):
     if model is None or tokenizer is None:
@@ -463,11 +480,7 @@ def summarize_stream():
                 chunk_data = {"type": "chunk", "text": chunk}
                 yield f"data: {json.dumps(chunk_data)}\n\n"
             
-            full_abs_text = full_abs_text.strip()
-            if full_abs_text and full_abs_text[-1] not in '.!?':
-                last_end = max(full_abs_text.rfind('.'), full_abs_text.rfind('!'), full_abs_text.rfind('?'))
-                if last_end > len(full_abs_text) // 2:
-                    full_abs_text = full_abs_text[:last_end + 1]
+            full_abs_text = trim_to_complete_sentence(full_abs_text)
 
             abs_words = len(full_abs_text.split())
             final_data = {
@@ -524,6 +537,128 @@ def word_count():
     words = len(text.split()) if text else 0
     read_time = max(1, round(words / 200))
     return jsonify({"wordCount": words, "readTime": read_time})
+
+
+@app.route("/api/export-pdf", methods=["POST"])
+def export_pdf():
+    """
+    Generate PDF asli di server (pakai reportlab) dan kirim sebagai file
+    download langsung — TIDAK lewat dialog print browser sama sekali.
+    Ini berbeda dari window.print() di frontend yang selalu memunculkan
+    dialog OS/browser; endpoint ini menghasilkan file biner PDF yang
+    langsung di-download begitu response diterima.
+    """
+    data = request.get_json(force=True)
+    abstractive = data.get("abstractive")
+    extractive = data.get("extractive")
+    keywords = data.get("keywords") or []
+    method = data.get("method", "both")
+
+    if not abstractive and not extractive:
+        return jsonify({"error": "Tidak ada data ringkasan untuk diekspor."}), 400
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        topMargin=20 * mm,
+        bottomMargin=20 * mm,
+        leftMargin=20 * mm,
+        rightMargin=20 * mm,
+    )
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "ReportTitle", parent=styles["Title"], fontSize=18, spaceAfter=12,
+        textColor=colors.black,
+    )
+    heading_style = ParagraphStyle(
+        "SectionHeading", parent=styles["Heading2"], fontSize=13, spaceAfter=6,
+        textColor=colors.black,
+    )
+    body_style = ParagraphStyle(
+        "BodyJustify", parent=styles["Normal"], fontSize=11, leading=16,
+        alignment=TA_JUSTIFY, spaceAfter=10,
+    )
+    meta_style = ParagraphStyle(
+        "Meta", parent=styles["Normal"], fontSize=9, textColor=colors.grey,
+        spaceAfter=14,
+    )
+
+    story = []
+    story.append(Paragraph("Laporan Hasil Ringkasan Otomatis", title_style))
+    story.append(HRFlowable(width="100%", thickness=1.2, color=colors.black))
+    story.append(Spacer(1, 14))
+
+    if keywords:
+        kw_text = "Kata kunci: " + ", ".join(keywords)
+        story.append(Paragraph(kw_text, meta_style))
+
+    # ── Abstraktif
+    if abstractive and method in ("both", "abstractive"):
+        story.append(Paragraph("Abstraktif &middot; mT5-small", heading_style))
+        story.append(Paragraph(abstractive.get("text", ""), body_style))
+        m = abstractive.get("metrics", {})
+        meta_line = (
+            f"Jumlah kata: {abstractive.get('wordCount', '—')} &nbsp;|&nbsp; "
+            f"Kompresi: -{abstractive.get('compression', '—')}% &nbsp;|&nbsp; "
+            f"ROUGE-1: {m.get('rouge1', '—')} &nbsp;ROUGE-2: {m.get('rouge2', '—')} "
+            f"&nbsp;ROUGE-L: {m.get('rougeL', '—')}"
+        )
+        story.append(Paragraph(meta_line, meta_style))
+        story.append(Spacer(1, 10))
+
+    # ── Ekstraktif
+    if extractive and method in ("both", "extractive"):
+        story.append(Paragraph("Ekstraktif &middot; TextRank", heading_style))
+        sentences = extractive.get("sentences") or [extractive.get("text", "")]
+        for i, s in enumerate(sentences, 1):
+            story.append(Paragraph(f"{i}. {s}", body_style))
+        m = extractive.get("metrics", {})
+        meta_line = (
+            f"Jumlah kata: {extractive.get('wordCount', '—')} &nbsp;|&nbsp; "
+            f"Kompresi: -{extractive.get('compression', '—')}% &nbsp;|&nbsp; "
+            f"ROUGE-1: {m.get('rouge1', '—')} &nbsp;ROUGE-2: {m.get('rouge2', '—')} "
+            f"&nbsp;ROUGE-L: {m.get('rougeL', '—')}"
+        )
+        story.append(Paragraph(meta_line, meta_style))
+
+    # ── Tabel perbandingan (hanya jika kedua metode ada)
+    if method == "both" and abstractive and extractive:
+        story.append(Spacer(1, 10))
+        story.append(Paragraph("Perbandingan Metrik", heading_style))
+        am = abstractive.get("metrics", {})
+        em = extractive.get("metrics", {})
+        table_data = [
+            ["Metrik", "Abstraktif (mT5)", "Ekstraktif (TextRank)"],
+            ["ROUGE-1", str(am.get("rouge1", "—")), str(em.get("rouge1", "—"))],
+            ["ROUGE-2", str(am.get("rouge2", "—")), str(em.get("rouge2", "—"))],
+            ["ROUGE-L", str(am.get("rougeL", "—")), str(em.get("rougeL", "—"))],
+        ]
+        table = Table(table_data, colWidths=[140, 160, 160])
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#141b2b")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTSIZE", (0, 0), (-1, -1), 10),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f1f3ff")]),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.append(table)
+
+    doc.build(story)
+    buffer.seek(0)
+
+    return Response(
+        buffer.getvalue(),
+        mimetype="application/pdf",
+        headers={
+            "Content-Disposition": "attachment; filename=laporan_ringkasan.pdf"
+        },
+    )
 
 
 if __name__ == "__main__":
